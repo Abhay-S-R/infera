@@ -56,10 +56,11 @@ async def scribe_node(state: PipelineState) -> dict:
             )]
         }
 
-    # Extract sources from research
+    # Extract sources from research (now a list from parallel scouts)
     sources = []
-    if research and research.results:
-        sources = [res.url for res in research.results if res.url]
+    if research:
+        for r in research:
+            sources.extend([res.url for res in r.results if res.url])
 
     # Construct the user prompt
     prompt = f"""

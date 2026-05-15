@@ -64,6 +64,7 @@ async def scout_node(state: PipelineState) -> dict:
     signal = state["signal"]
     workflow_id = state.get("workflow_id", "unknown")
     retry_count = state.get("retry_count", 0)
+    current_angle = state.get("current_angle", "General Investigation")
 
     # Check if Arbiter sent us back with specific retry queries
     validation = state.get("validation_result")
@@ -94,7 +95,7 @@ async def scout_node(state: PipelineState) -> dict:
         queries = retry_queries
         wf_logger.info("scout_using_retry_queries", queries=queries)
     else:
-        queries = await _generate_queries(signal, sentinel_output, num_queries=4, budget=budget)
+        queries = await _generate_queries(signal, sentinel_output, current_angle, num_queries=4, budget=budget)
         wf_logger.info("scout_queries_generated", queries=queries)
 
     await publish_event("agent_activity", {
@@ -226,6 +227,7 @@ async def scout_node(state: PipelineState) -> dict:
 async def _generate_queries(
     signal,
     sentinel_output: SentinelOutput,
+    current_angle: str,
     num_queries: int = 4,
     budget=None,
 ) -> list[str]:
@@ -234,12 +236,13 @@ async def _generate_queries(
         f"Signal: {signal.title}\n"
         f"Event Type: {sentinel_output.event_type}\n"
         f"Entities: {', '.join(sentinel_output.entities)}\n"
+        f"Investigation Angle: {current_angle}\n"
         f"Summary: {sentinel_output.summary}\n"
     )
     if signal.custom_question:
         prompt += f"User's Question: {signal.custom_question}\n"
 
-    prompt += f"\nGenerate {num_queries} diverse search queries for competitive intelligence research."
+    prompt += f"\nGenerate {num_queries} diverse search queries specifically focused on the '{current_angle}' angle."
 
     try:
         raw, _usage = await generate(

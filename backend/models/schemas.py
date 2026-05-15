@@ -50,6 +50,7 @@ class SentinelOutput(BaseModel):
     should_investigate: bool = Field(description="Whether to proceed with research")
     event_type: EventType = Field(description="Classification of the signal")
     entities: list[str] = Field(default_factory=list, description="Companies/products/people mentioned")
+    investigation_angles: list[str] = Field(default_factory=list, description="3 distinct angles to research (e.g. Financial, Technical, Market)")
     summary: str = Field(description="One-paragraph summary of the signal")
     reasoning: str = Field(description="Why this score was assigned")
 

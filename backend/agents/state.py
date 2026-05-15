@@ -47,8 +47,8 @@ class PipelineState(TypedDict, total=False):
     # ─── Sentinel output ───
     sentinel_output: Annotated[Optional[SentinelOutput], _replace]
 
-    # ─── Scout output ───
-    research_output: Annotated[Optional[ResearchOutput], _replace]
+    # ─── Scout output (List for parallel fan-out) ───
+    research_output: Annotated[list[ResearchOutput], _append_list]
 
     # ─── Strategist output ───
     analysis_output: Annotated[Optional[AnalysisOutput], _replace]
@@ -64,6 +64,7 @@ class PipelineState(TypedDict, total=False):
     max_retries: Annotated[int, _replace]                       # Max retry limit (default 3)
     should_continue: Annotated[bool, _replace]                  # Whether pipeline should proceed
     current_agent: Annotated[str, _replace]                     # Which agent is currently running
+    current_angle: Annotated[Optional[str], _replace]           # The specific angle this scout is researching
     error: Annotated[Optional[str], _replace]                   # Error message if something failed
 
     # ─── Activity log ───
