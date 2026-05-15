@@ -25,33 +25,7 @@ from backend.agents.strategist import strategist_node
 from backend.agents.scribe import scribe_node
 from backend.agents.sentinel import sentinel_node
 from backend.agents.scout import scout_node
-
-
-
-async def arbiter_node(state: PipelineState) -> dict:
-    """
-    Validator agent — fact-checks analysis against research evidence.
-    Stub: auto-approves everything.
-    """
-    print("[Arbiter] Validating...")
-
-    return {
-        "validation_result": ValidationResult(
-            is_approved=True,
-            overall_confidence=0.8,
-            claim_verifications=[],
-            issues_found=[],
-            suggestions=[],
-            retry_with_queries=None,
-        ),
-        "current_agent": "arbiter",
-        "activity_log": [ActivityEvent(
-            agent="arbiter",
-            status=AgentStatus.DONE,
-            message="Validation complete",
-            detail="Stub: auto-approved",
-        )],
-    }
+from backend.agents.arbiter import arbiter_node
 
 
 
