@@ -12,9 +12,18 @@ from backend.models.schemas import SignalInput
 from backend.agents.graph import run_pipeline
 from backend.services.checkpointer import get_checkpointer
 from backend.services.events import publish_event
+from backend.services.budget import usage_from_pipeline_result
 from backend.services.logger import get_logger
 
 logger = get_logger("dispatcher")
+
+
+def _format_pipeline_error(error: Exception) -> str:
+    """Human-readable error for DB/logs (some exceptions have an empty str())."""
+    msg = str(error).strip()
+    if msg:
+        return msg[:500]
+    return f"{type(error).__name__}: {error!r}"[:500]
 
 
 def _budget_stopped(result: dict) -> bool:
@@ -48,8 +57,9 @@ async def _complete_workflow(
 
     workflow.status = "budget_exceeded" if budget_stopped else "completed"
     workflow.current_agent = "done"
-    workflow.tokens_used = result.get("total_tokens_used", 0) or 0
-    workflow.estimated_cost = result.get("total_cost_usd", 0.0) or 0.0
+    tokens, cost = usage_from_pipeline_result(result)
+    workflow.tokens_used = tokens
+    workflow.estimated_cost = cost
     if budget_stopped:
         workflow.extra_data = {
             **(workflow.extra_data or {}),
@@ -89,11 +99,16 @@ async def _fail_workflow(
     workflow_id: str,
     webhook_id: int,
     error: Exception,
+    result: dict | None = None,
 ) -> None:
-    logger.error("pipeline_failed", workflow_id=workflow_id, error=str(error))
+    err_msg = _format_pipeline_error(error)
+    logger.error("pipeline_failed", workflow_id=workflow_id, error=err_msg, error_type=type(error).__name__)
 
     workflow.status = "failed"
-    workflow.extra_data = {**(workflow.extra_data or {}), "error": str(error)[:500]}
+    workflow.extra_data = {**(workflow.extra_data or {}), "error": err_msg}
+    if result:
+        workflow.tokens_used = result.get("total_tokens_used", 0) or workflow.tokens_used or 0
+        workflow.estimated_cost = result.get("total_cost_usd", 0.0) or workflow.estimated_cost or 0.0
     session.add(workflow)
     await session.commit()
 
@@ -157,7 +172,15 @@ async def _execute_pipeline(
             await _complete_workflow(session, workflow, result, wf_id_str, webhook_id)
 
         except Exception as e:
-            await _fail_workflow(session, workflow, wf_id_str, webhook_id, e)
+            partial: dict = {}
+            try:
+                partial = {
+                    "total_tokens_used": workflow.tokens_used or 0,
+                    "total_cost_usd": workflow.estimated_cost or 0.0,
+                }
+            except Exception:
+                pass
+            await _fail_workflow(session, workflow, wf_id_str, webhook_id, e, result=partial)
 
 
 async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None:

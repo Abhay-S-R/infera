@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.api import analyze, competitors, reports, websocket, webhooks
+from backend.api import analyze, competitors, health, reports, websocket, webhooks
 from backend.config import settings
 from backend.models.database import init_db
 from backend.services.background import resume_interrupted_workflows
@@ -25,6 +25,7 @@ app.include_router(webhooks.router)
 app.include_router(analyze.router)
 app.include_router(reports.router)
 app.include_router(competitors.router)
+app.include_router(health.router)
 app.include_router(websocket.router)
 
 

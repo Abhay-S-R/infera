@@ -127,6 +127,28 @@ def estimate_cost_usd(total_tokens: int) -> float:
     return (total_tokens / 1000.0) * _COST_PER_1K_TOKENS
 
 
+def format_cost_usd(amount: float) -> str:
+    """Format a USD amount for API responses."""
+    return f"${amount:.2f}"
+
+
+def usage_from_pipeline_result(result: dict[str, Any]) -> tuple[int, float]:
+    """
+    Read token/cost totals from a pipeline result dict.
+
+    LangGraph may expose totals on top-level fields or only inside token_budget.
+    """
+    tokens = int(result.get("total_tokens_used") or 0)
+    cost = float(result.get("total_cost_usd") or 0.0)
+    budget = result.get("token_budget")
+    if isinstance(budget, dict):
+        if not tokens:
+            tokens = int(budget.get("tokens_used") or 0)
+        if not cost:
+            cost = float(budget.get("cost_usd") or 0.0)
+    return tokens, cost
+
+
 def check_budget_or_stop(
     state: dict[str, Any],
     agent: str,

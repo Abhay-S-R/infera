@@ -128,6 +128,7 @@ async def run_pipeline(
     checkpointer=None,
     *,
     resume: bool = False,
+    initial_state: PipelineState | None = None,
 ) -> PipelineState:
     """
     Run the full ASCENT pipeline for a given signal.
@@ -137,6 +138,7 @@ async def run_pipeline(
         workflow_id: Workflow / checkpoint thread id (auto-generated if not provided)
         checkpointer: LangGraph PostgresSaver for crash recovery
         resume: If True, continue from the last checkpointed agent
+        initial_state: Optional dict to override default starting state (for testing)
 
     Returns:
         Final PipelineState with all agent outputs
@@ -151,12 +153,12 @@ async def run_pipeline(
         result = await graph.ainvoke(None, config=config)
         return result
 
-    if signal is None:
+    if signal is None and not (initial_state and "signal" in initial_state):
         raise ValueError("signal is required when resume=False")
 
     budget = TokenBudget()
-    initial_state: PipelineState = {
-        "signal": signal,
+    default_state: PipelineState = {
+        "signal": signal,  # type: ignore[typeddict-item]
         "workflow_id": workflow_id,
         "retry_count": 0,
         "max_retries": 3,
@@ -169,6 +171,11 @@ async def run_pipeline(
         "total_cost_usd": 0.0,
         "budget_exceeded": False,
     }
+    
+    # Merge initial_state into defaults
+    final_initial_state = default_state.copy()
+    if initial_state:
+        final_initial_state.update(initial_state)
 
-    result = await graph.ainvoke(initial_state, config=config)
+    result = await graph.ainvoke(final_initial_state, config=config)
     return result

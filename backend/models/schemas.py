@@ -139,6 +139,20 @@ class ActivityEvent(BaseModel):
     tokens_used: Optional[int] = None
 
 
+# ─── Health / cost stats (Dev 4 Phase 2b) ───
+
+class HealthStatsResponse(BaseModel):
+    """Dashboard health panel aggregates."""
+    active_workflows: int
+    total_reports: int
+    total_tokens: int
+    estimated_cost: str = Field(description='Formatted USD, e.g. "$12.34"')
+    last_workflow_id: Optional[int] = None
+    last_workflow_status: Optional[str] = None
+    last_workflow_tokens: Optional[int] = None
+    last_workflow_error: Optional[str] = None
+
+
 # ─── Competitors (scheduled scans) ───
 
 class CompetitorCreate(BaseModel):

@@ -5,7 +5,7 @@ Dev 4 owns this file.
 from backend.services.logger import get_logger
 from backend.services.llm import generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.context import summarize_for_next_agent
+from backend.services.context import prepare_for_scribe
 from backend.agents.state import PipelineState
 from backend.models.schemas import ReportOutput, ActivityEvent, AgentStatus
 from datetime import datetime, timezone
@@ -39,9 +39,8 @@ async def scribe_node(state: PipelineState) -> dict:
         return stopped
 
     budget = get_budget(state)
-    ctx_state = await summarize_for_next_agent(state, "scribe", budget=budget)
-    analysis = ctx_state.get("analysis_output") or state.get("analysis_output")
-    research = ctx_state.get("research_output") or state.get("research_output")
+    ctx_state, analysis, research, estimated_tokens = await prepare_for_scribe(state, budget)
+    log.info("scribe_context_ready", estimated_state_tokens=estimated_tokens)
 
     # Guard against missing data
     if not analysis:
