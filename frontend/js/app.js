@@ -6,11 +6,9 @@ class App {
     }
 
     init() {
-        // Initialize routing
         window.addEventListener('hashchange', () => this.handleRouting());
         this.handleRouting();
         
-        // Initialize components
         if (typeof initWebSocket === 'function') {
             initWebSocket();
         }
@@ -19,20 +17,23 @@ class App {
             initPipeline();
         }
 
+        if (typeof initReports === 'function') {
+            initReports();
+        }
+
         this.setupSidebarNavigation();
+        this.setupManualTriggerForm();
     }
 
     handleRouting() {
         const hash = window.location.hash || '#dashboard';
         const pageName = hash.substring(1);
         
-        // Basic routing logic: Update title and active state in sidebar
         const titleElement = document.querySelector('.page-title');
         if (titleElement) {
             titleElement.textContent = pageName.charAt(0).toUpperCase() + pageName.slice(1);
         }
 
-        // Update active class on nav items based on hash
         const navItems = document.querySelectorAll('.nav-item');
         navItems.forEach(item => {
             const text = item.textContent.trim().toLowerCase();
@@ -40,6 +41,21 @@ class App {
                 item.classList.add('active');
             } else {
                 item.classList.remove('active');
+            }
+        });
+        
+        // Toggle page sections
+        const pages = document.querySelectorAll('.page-section');
+        pages.forEach(page => {
+            if (page.id === `page-${pageName}`) {
+                page.style.display = 'block';
+                // If it's reports, fetch again just in case
+                if (pageName === 'reports' && window.reportsManager) {
+                    window.reportsManager.fetchReports();
+                    window.reportsManager.backToList();
+                }
+            } else {
+                page.style.display = 'none';
             }
         });
     }
@@ -51,6 +67,55 @@ class App {
                 const text = e.currentTarget.textContent.trim().toLowerCase();
                 window.location.hash = `#${text}`;
             });
+        });
+    }
+
+    setupManualTriggerForm() {
+        const form = document.getElementById('analyze-form');
+        if (!form) return;
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const competitorName = document.getElementById('competitor-name').value;
+            const question = document.getElementById('analyze-question').value;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Launching...';
+            submitBtn.disabled = true;
+            
+            try {
+                // Post to API
+                const response = await fetch('http://localhost:8000/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        competitor: competitorName,
+                        question: question
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Failed to start analysis');
+                
+                // Add a local activity event
+                if (window.addActivityEvent) {
+                    window.addActivityEvent({
+                        agent: 'System',
+                        status: 'success',
+                        message: `Started analysis for ${competitorName}: "${question}"`
+                    });
+                }
+                
+                form.reset();
+            } catch (err) {
+                console.error(err);
+                alert('Error starting analysis: ' + err.message);
+            } finally {
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
         });
     }
 }
