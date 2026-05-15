@@ -47,7 +47,7 @@ class ReportsManager {
             el.innerHTML = `
                 <div class="card-header" style="margin-bottom: 1rem;">
                     ${title}
-                    <div class="card-icon" style="background: rgba(99, 102, 241, 0.1); color: var(--accent);">
+                    <div class="card-icon" style="background: rgba(255, 42, 42, 0.08); color: var(--accent);">
                         <i class="ph ph-file-text"></i>
                     </div>
                 </div>

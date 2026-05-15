@@ -8,9 +8,10 @@ function addActivityEvent(data) {
     item.className = 'activity-item slide-in';
     
     let statusClass = 'status-default';
-    if (data.status === 'active' || data.status === 'running') statusClass = 'status-active';
+    if (data.status === 'active' || data.status === 'running') statusClass = 'status-running';
     else if (data.status === 'done' || data.status === 'success') statusClass = 'status-success';
     else if (data.status === 'error' || data.status === 'failed') statusClass = 'status-error';
+    else if (data.status === 'retry') statusClass = 'status-retry';
     else if (data.status === 'idle') statusClass = 'status-idle';
 
     const timeString = data.timestamp 
@@ -19,12 +20,14 @@ function addActivityEvent(data) {
 
     const agentName = data.agent || data.node || 'System';
 
+    const displayStatus = data.status ? data.status.charAt(0).toUpperCase() + data.status.slice(1) : '';
+
     item.innerHTML = `
         <div class="activity-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
             <div class="activity-agent" style="display: flex; align-items: center; gap: 0.5rem;">
                 <span class="status-indicator ${statusClass}"></span>
-                <strong style="color: var(--text-main); font-size: 0.95rem;">${agentName}</strong>
-                ${data.status ? `<span class="badge ${statusClass}">${data.status}</span>` : ''}
+                <strong style="color: var(--text-main); font-size: 0.95rem; text-transform: capitalize;">${agentName}</strong>
+                ${displayStatus ? `<span class="badge ${statusClass}">${displayStatus}</span>` : ''}
             </div>
             <span class="activity-time" style="color: var(--text-muted); font-size: 0.75rem; font-family: monospace;">${timeString}</span>
         </div>
@@ -33,9 +36,14 @@ function addActivityEvent(data) {
         </div>
     `;
 
-    feedContainer.prepend(item);
+    // Append to bottom
+    feedContainer.appendChild(item);
 
-    if (feedContainer.children.length > 50) {
-        feedContainer.removeChild(feedContainer.lastChild);
+    // Auto-scroll to latest
+    feedContainer.scrollTop = feedContainer.scrollHeight;
+
+    // Keep max 100 items
+    if (feedContainer.children.length > 100) {
+        feedContainer.removeChild(feedContainer.firstChild);
     }
 }
