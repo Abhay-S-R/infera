@@ -9,6 +9,7 @@ from backend.services.context import prepare_for_scribe
 from backend.agents.state import PipelineState
 from backend.models.schemas import ReportOutput, ActivityEvent, AgentStatus
 from datetime import datetime, timezone
+from backend.services.tracing import get_tracer
 
 logger = get_logger("scribe")
 
@@ -33,14 +34,16 @@ async def scribe_node(state: PipelineState) -> dict:
     log = logger.with_context(workflow_id=workflow_id)
     log.info("scribe_started", signal_title=signal.title if signal else "Unknown")
 
-    stopped = check_budget_or_stop(state, "scribe", workflow_id)
-    if stopped:
-        stopped["budget_exceeded"] = True
-        return stopped
+    tracer = get_tracer()
+    with tracer.start_span("scribe", workflow_id=workflow_id):
+        stopped = check_budget_or_stop(state, "scribe", workflow_id)
+        if stopped:
+            stopped["budget_exceeded"] = True
+            return stopped
 
-    budget = get_budget(state)
-    ctx_state, analysis, research, estimated_tokens = await prepare_for_scribe(state, budget)
-    log.info("scribe_context_ready", estimated_state_tokens=estimated_tokens)
+        budget = get_budget(state)
+        ctx_state, analysis, research, estimated_tokens = await prepare_for_scribe(state, budget)
+        log.info("scribe_context_ready", estimated_state_tokens=estimated_tokens)
 
     # Guard against missing data
     if not analysis:

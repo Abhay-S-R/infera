@@ -70,7 +70,7 @@ async def test_checkpointer_setup() -> bool:
     from backend.services.checkpointer import init_checkpointer, get_checkpointer, shutdown_checkpointer
 
     saver = await init_checkpointer()
-    same = get_checkpointer()
+    same = await get_checkpointer()
     ok = saver is same and saver is not None
 
     await shutdown_checkpointer()

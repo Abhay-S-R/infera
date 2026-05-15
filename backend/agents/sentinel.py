@@ -20,6 +20,7 @@ from backend.services.llm import generate_structured
 from backend.services.budget import BudgetExceededError, check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
+from backend.services.tracing import get_tracer
 from backend.agents.state import PipelineState
 
 logger = get_logger("sentinel")
@@ -54,126 +55,128 @@ async def sentinel_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id)
     wf_logger.info("sentinel_started", title=signal.title, source=signal.source)
 
-    stopped = check_budget_or_stop(state, "sentinel", workflow_id)
-    if stopped:
-        stopped["budget_exceeded"] = True
-        return stopped
+    tracer = get_tracer()
+    with tracer.start_span("sentinel", workflow_id=workflow_id):
+        stopped = check_budget_or_stop(state, "sentinel", workflow_id)
+        if stopped:
+            stopped["budget_exceeded"] = True
+            return stopped
 
-    budget = get_budget(state)
+        budget = get_budget(state)
 
-    # Publish real-time event for the dashboard
-    await publish_event("agent_activity", {
-        "agent": "sentinel",
-        "status": "running",
-        "message": f"Evaluating signal: {signal.title[:80]}",
-        "workflow_id": workflow_id,
-    })
-
-    # Build the prompt with all available signal data
-    prompt_parts = [f"**Signal Title:** {signal.title}"]
-    if signal.source:
-        prompt_parts.append(f"**Source:** {signal.source}")
-    if signal.url:
-        prompt_parts.append(f"**URL:** {signal.url}")
-    if signal.content:
-        prompt_parts.append(f"**Content:**\n{signal.content[:2000]}")
-    if signal.competitor_name:
-        prompt_parts.append(f"**Known Competitor:** {signal.competitor_name}")
-    if signal.custom_question:
-        prompt_parts.append(f"**User's Question:** {signal.custom_question}")
-
-    prompt = (
-        "Evaluate the following competitive intelligence signal:\n\n"
-        + "\n".join(prompt_parts)
-        + "\n\nClassify this signal and determine if it warrants deeper investigation."
-    )
-
-    try:
-        result, _usage = await generate_structured(
-            prompt=prompt,
-            response_model=SentinelOutput,
-            system=SENTINEL_SYSTEM_PROMPT,
-            temperature=0.3,  # Low temp for consistent classification
-            model="llama-3.3-70b-versatile",
-            budget=budget,
-            agent="sentinel",
-        )
-
-        wf_logger.info(
-            "sentinel_completed",
-            relevance=result.relevance_score,
-            should_investigate=result.should_investigate,
-            event_type=result.event_type,
-            entities=result.entities,
-        )
-
-        # Publish completion event
+        # Publish real-time event for the dashboard
         await publish_event("agent_activity", {
             "agent": "sentinel",
-            "status": "done",
-            "message": f"Relevance: {result.relevance_score:.2f} — {'Investigating' if result.should_investigate else 'Skipping'}",
-            "detail": result.reasoning[:200],
+            "status": "running",
+            "message": f"Evaluating signal: {signal.title[:80]}",
             "workflow_id": workflow_id,
         })
 
-        return {
-            "sentinel_output": result,
-            "current_agent": "sentinel",
-            "should_continue": result.should_investigate,
-            **budget.state_updates(),
-            "activity_log": [ActivityEvent(
+        # Build the prompt with all available signal data
+        prompt_parts = [f"**Signal Title:** {signal.title}"]
+        if signal.source:
+            prompt_parts.append(f"**Source:** {signal.source}")
+        if signal.url:
+            prompt_parts.append(f"**URL:** {signal.url}")
+        if signal.content:
+            prompt_parts.append(f"**Content:**\n{signal.content[:2000]}")
+        if signal.competitor_name:
+            prompt_parts.append(f"**Known Competitor:** {signal.competitor_name}")
+        if signal.custom_question:
+            prompt_parts.append(f"**User's Question:** {signal.custom_question}")
+
+        prompt = (
+            "Evaluate the following competitive intelligence signal:\n\n"
+            + "\n".join(prompt_parts)
+            + "\n\nClassify this signal and determine if it warrants deeper investigation."
+        )
+
+        try:
+            result, _usage = await generate_structured(
+                prompt=prompt,
+                response_model=SentinelOutput,
+                system=SENTINEL_SYSTEM_PROMPT,
+                temperature=0.3,  # Low temp for consistent classification
+                model="llama-3.3-70b-versatile",
+                budget=budget,
                 agent="sentinel",
-                status=AgentStatus.DONE,
-                message=f"Signal scored: {result.relevance_score:.2f}",
-                detail=result.reasoning[:300],
-                workflow_id=workflow_id,
-            )],
-        }
+            )
 
-    except BudgetExceededError as e:
-        wf_logger.warning("sentinel_budget_exceeded", error=str(e))
-        return {
-            **budget.state_updates(),
-            "error": str(e),
-            "budget_exceeded": True,
-            "should_continue": False,
-            "current_agent": "sentinel",
-            "activity_log": [ActivityEvent(
-                agent="sentinel",
-                status=AgentStatus.ERROR,
-                message="Budget exceeded",
-                detail=str(e),
-                workflow_id=workflow_id,
-            )],
-        }
+            wf_logger.info(
+                "sentinel_completed",
+                relevance=result.relevance_score,
+                should_investigate=result.should_investigate,
+                event_type=result.event_type,
+                entities=result.entities,
+            )
 
-    except Exception as e:
-        wf_logger.error("sentinel_failed", error=str(e))
+            # Publish completion event
+            await publish_event("agent_activity", {
+                "agent": "sentinel",
+                "status": "done",
+                "message": f"Relevance: {result.relevance_score:.2f} — {'Investigating' if result.should_investigate else 'Skipping'}",
+                "detail": result.reasoning[:200],
+                "workflow_id": workflow_id,
+            })
 
-        await publish_event("agent_activity", {
-            "agent": "sentinel",
-            "status": "error",
-            "message": f"Sentinel failed: {str(e)[:100]}",
-            "workflow_id": workflow_id,
-        })
+            return {
+                "sentinel_output": result,
+                "current_agent": "sentinel",
+                "should_continue": result.should_investigate,
+                **budget.state_updates(),
+                "activity_log": [ActivityEvent(
+                    agent="sentinel",
+                    status=AgentStatus.DONE,
+                    message=f"Signal scored: {result.relevance_score:.2f}",
+                    detail=result.reasoning[:300],
+                    workflow_id=workflow_id,
+                )],
+            }
 
-        # On failure, default to investigating (fail-open)
-        return {
-            "sentinel_output": SentinelOutput(
-                relevance_score=0.7,
-                should_investigate=True,
-                event_type="general",
-                entities=[],
-                summary=signal.title,
-                reasoning=f"Sentinel LLM call failed ({str(e)[:50]}), defaulting to investigate.",
-            ),
-            "current_agent": "sentinel",
-            "should_continue": True,
-            "error": f"Sentinel error: {str(e)}",
-            "activity_log": [ActivityEvent(
-                agent="sentinel",
-                status=AgentStatus.ERROR,
-                message=f"Fallback: defaulting to investigate. Error: {str(e)[:100]}",
-                workflow_id=workflow_id,
-            )],
-        }
+        except BudgetExceededError as e:
+            wf_logger.warning("sentinel_budget_exceeded", error=str(e))
+            return {
+                **budget.state_updates(),
+                "error": str(e),
+                "budget_exceeded": True,
+                "should_continue": False,
+                "current_agent": "sentinel",
+                "activity_log": [ActivityEvent(
+                    agent="sentinel",
+                    status=AgentStatus.ERROR,
+                    message="Budget exceeded",
+                    detail=str(e),
+                    workflow_id=workflow_id,
+                )],
+            }
+
+        except Exception as e:
+            wf_logger.error("sentinel_failed", error=str(e))
+
+            await publish_event("agent_activity", {
+                "agent": "sentinel",
+                "status": "error",
+                "message": f"Sentinel failed: {str(e)[:100]}",
+                "workflow_id": workflow_id,
+            })
+
+            # On failure, default to investigating (fail-open)
+            return {
+                "sentinel_output": SentinelOutput(
+                    relevance_score=0.7,
+                    should_investigate=True,
+                    event_type="general",
+                    entities=[],
+                    summary=signal.title,
+                    reasoning=f"Sentinel LLM call failed ({str(e)[:50]}), defaulting to investigate.",
+                ),
+                "current_agent": "sentinel",
+                "should_continue": True,
+                "error": f"Sentinel error: {str(e)}",
+                "activity_log": [ActivityEvent(
+                    agent="sentinel",
+                    status=AgentStatus.ERROR,
+                    message=f"Fallback: defaulting to investigate. Error: {str(e)[:100]}",
+                    workflow_id=workflow_id,
+                )],
+            }

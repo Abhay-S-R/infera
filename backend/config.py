@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # Optional integrations
     OMIUM_API_KEY: Optional[str] = None
+    OMIUM_ENDPOINT: str = "https://api.omium.dev"
     OMIUM_WORKSPACE: str = "ascent"
     SLACK_WEBHOOK_URL: Optional[str] = None
 

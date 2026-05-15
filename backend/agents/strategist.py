@@ -8,6 +8,7 @@ from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.context import prepare_for_strategist, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
+from backend.services.tracing import get_tracer
 
 logger = get_logger("strategist")
 
@@ -33,12 +34,14 @@ async def strategist_node(state: PipelineState) -> dict:
     log = logger.with_context(workflow_id=workflow_id)
     log.info("strategist_started", signal_title=signal.title)
 
-    stopped = check_budget_or_stop(state, "strategist", workflow_id)
-    if stopped:
-        stopped["budget_exceeded"] = True
-        return stopped
+    tracer = get_tracer()
+    with tracer.start_span("strategist", workflow_id=workflow_id):
+        stopped = check_budget_or_stop(state, "strategist", workflow_id)
+        if stopped:
+            stopped["budget_exceeded"] = True
+            return stopped
 
-    budget = get_budget(state)
+        budget = get_budget(state)
     ctx_state, research, estimated_tokens = await prepare_for_strategist(state, budget)
     research = ctx_state.get("research_output") or research
     tier = budget.tier()

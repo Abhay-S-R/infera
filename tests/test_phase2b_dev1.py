@@ -15,11 +15,11 @@ from unittest.mock import AsyncMock, patch
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db",
+    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
 )
 os.environ.setdefault(
     "DATABASE_URL_SYNC",
-    "postgresql://ascent:ascent_pass@localhost:5432/ascent_db",
+    "postgresql://ascent:ascent_pass@localhost:5433/ascent_db",
 )
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

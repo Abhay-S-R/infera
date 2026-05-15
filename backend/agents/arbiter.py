@@ -19,6 +19,7 @@ from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.agents.state import PipelineState
+from backend.services.tracing import get_tracer
 
 logger = get_logger("arbiter")
 
@@ -65,19 +66,21 @@ async def arbiter_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("arbiter_started")
 
-    stopped = check_budget_or_stop(state, "arbiter", workflow_id)
-    if stopped:
-        stopped["budget_exceeded"] = True
-        return stopped
+    tracer = get_tracer()
+    with tracer.start_span("arbiter", workflow_id=workflow_id, retry=retry_count):
+        stopped = check_budget_or_stop(state, "arbiter", workflow_id)
+        if stopped:
+            stopped["budget_exceeded"] = True
+            return stopped
 
-    budget = get_budget(state)
+        budget = get_budget(state)
 
-    await publish_event("agent_activity", {
-        "agent": "arbiter",
-        "status": "running",
-        "message": f"Validating analysis (attempt {retry_count + 1}/{max_retries + 1})",
-        "workflow_id": workflow_id,
-    })
+        await publish_event("agent_activity", {
+            "agent": "arbiter",
+            "status": "running",
+            "message": f"Validating analysis (attempt {retry_count + 1}/{max_retries + 1})",
+            "workflow_id": workflow_id,
+        })
 
     # If no analysis exists (strategist failed), auto-approve with low confidence
     if not analysis:

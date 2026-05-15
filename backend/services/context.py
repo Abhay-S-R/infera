@@ -17,6 +17,9 @@ from backend.models.schemas import (
 from backend.services.budget import TokenBudget, get_budget
 from backend.services.llm import generate
 from backend.services.logger import get_logger
+from backend.models.tables import Report
+from backend.models.database import AsyncSessionLocal
+from sqlalchemy import select
 
 logger = get_logger("context")
 
@@ -353,3 +356,18 @@ def research_prompt_block(research: ResearchOutput, *, tier: int) -> str:
         f"Key Findings:\n{findings}\n\n"
         f"Raw Content Summary:\n{research.raw_content_summary}\n"
     )
+
+
+async def get_competitor_history(competitor: str, limit: int = 3) -> list[Report]:
+    """Return the most recent `limit` reports whose title references the competitor.
+
+    This uses a case-insensitive LIKE match on the `Report.title` field and
+    returns ORM `Report` objects ordered by `created_at` desc.
+    """
+    pattern = f"%{competitor}%"
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Report).where(Report.title.ilike(pattern)).order_by(Report.created_at.desc()).limit(limit)
+        )
+        reports = result.scalars().all()
+    return reports

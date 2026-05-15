@@ -14,6 +14,7 @@ from backend.services.background import resume_interrupted_workflows
 from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer  # async
 from backend.services.logger import configure_logging, get_logger
 from backend.services.scheduler import start_scheduler, stop_scheduler
+from backend.services.tracing import init_omium
 
 configure_logging()
 logger = get_logger("main")
@@ -51,6 +52,7 @@ async def database_availability_middleware(request: Request, call_next):
 
 @app.on_event("startup")
 async def on_startup() -> None:
+    init_omium()  # Initialize Omium tracing with API credentials
     await init_db()
     await init_checkpointer()
     await resume_interrupted_workflows()

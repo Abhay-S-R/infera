@@ -22,6 +22,7 @@ from backend.services.llm import generate, generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
+from backend.services.tracing import get_tracer
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 from backend.agents.tools.url_scraper import scrape_url
@@ -74,20 +75,22 @@ async def scout_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("scout_started", title=signal.title)
 
-    stopped = check_budget_or_stop(state, "scout", workflow_id)
-    if stopped:
-        stopped["budget_exceeded"] = True
-        return stopped
+    tracer = get_tracer()
+    with tracer.start_span("scout", workflow_id=workflow_id, retry=retry_count):
+        stopped = check_budget_or_stop(state, "scout", workflow_id)
+        if stopped:
+            stopped["budget_exceeded"] = True
+            return stopped
 
-    budget = get_budget(state)
+        budget = get_budget(state)
 
-    await publish_event("agent_activity", {
-        "agent": "scout",
-        "status": "running",
-        "message": f"{'Re-researching' if retry_count > 0 else 'Researching'}: {signal.title[:80]}",
-        "detail": f"Retry #{retry_count}" if retry_count > 0 else "Initial research",
-        "workflow_id": workflow_id,
-    })
+        await publish_event("agent_activity", {
+            "agent": "scout",
+            "status": "running",
+            "message": f"{'Re-researching' if retry_count > 0 else 'Researching'}: {signal.title[:80]}",
+            "detail": f"Retry #{retry_count}" if retry_count > 0 else "Initial research",
+            "workflow_id": workflow_id,
+        })
 
     # ─── Step 1: Generate search queries ───
     if retry_queries:
