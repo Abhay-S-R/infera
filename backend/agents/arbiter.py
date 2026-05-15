@@ -15,6 +15,7 @@ from backend.models.schemas import (
     AgentStatus,
 )
 from backend.services.llm import generate_structured
+from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.agents.state import PipelineState
@@ -60,6 +61,13 @@ async def arbiter_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("arbiter_started")
 
+    stopped = check_budget_or_stop(state, "arbiter", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
+
+    budget = get_budget(state)
+
     await publish_event("agent_activity", {
         "agent": "arbiter",
         "status": "running",
@@ -85,13 +93,15 @@ async def arbiter_node(state: PipelineState) -> dict:
     prompt = _build_validation_prompt(signal, analysis, research)
 
     try:
-        result: ValidationResult = await generate_structured(
+        result, _usage = await generate_structured(
             prompt=prompt,
             response_model=ValidationResult,
             system=ARBITER_SYSTEM_PROMPT,
             temperature=0.2,  # Very low temp for consistent validation
             max_output_tokens=8192,
             model="llama-3.3-70b-versatile",  # Fast validation via Groq
+            budget=budget,
+            agent="arbiter",
         )
 
         wf_logger.info(
@@ -121,6 +131,7 @@ async def arbiter_node(state: PipelineState) -> dict:
             "validation_result": result,
             "current_agent": "arbiter",
             "retry_count": retry_count + 1 if not result.is_approved else retry_count,
+            **budget.state_updates(),
             "activity_log": [ActivityEvent(
                 agent="arbiter",
                 status=AgentStatus.DONE,

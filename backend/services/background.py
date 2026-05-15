@@ -55,6 +55,9 @@ async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None
 
             # ─── Save report to DB ───
             report_output = result.get("report_output")
+            budget_stopped = result.get("budget_exceeded") or (
+                result.get("error") and "budget exceeded" in (result.get("error") or "").lower()
+            )
             if report_output:
                 report = Report(
                     workflow_id=workflow.id,
@@ -69,6 +72,16 @@ async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None
             # ─── Update workflow as completed ───
             workflow.status = "completed"
             workflow.current_agent = "done"
+            workflow.tokens_used = result.get("total_tokens_used", 0) or 0
+            workflow.estimated_cost = result.get("total_cost_usd", 0.0) or 0.0
+            if result.get("budget_exceeded") or (
+                result.get("error") and "budget exceeded" in (result.get("error") or "").lower()
+            ):
+                workflow.status = "budget_exceeded"
+                workflow.extra_data = {
+                    **(workflow.extra_data or {}),
+                    "budget_error": result.get("error"),
+                }
             session.add(workflow)
             await session.commit()
 
@@ -76,13 +89,24 @@ async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None
                 "pipeline_completed",
                 workflow_id=workflow_id,
                 report_title=report_output.title if report_output else "No report",
+                tokens_used=workflow.tokens_used,
+                estimated_cost=workflow.estimated_cost,
+            )
+
+            completion_status = "budget_exceeded" if budget_stopped else "completed"
+            completion_message = (
+                result.get("error", "Token budget exceeded")
+                if budget_stopped
+                else (f"Report generated: {report_output.title}" if report_output else "Pipeline completed")
             )
 
             await publish_event("workflow.completed", {
                 "workflow_id": workflow_id,
                 "webhook_id": webhook_id,
-                "status": "completed",
-                "message": f"Report generated: {report_output.title}" if report_output else "Pipeline completed",
+                "status": completion_status,
+                "message": completion_message,
+                "tokens_used": workflow.tokens_used,
+                "estimated_cost": workflow.estimated_cost,
             })
 
         except Exception as e:

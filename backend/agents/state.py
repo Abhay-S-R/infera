@@ -69,6 +69,8 @@ class PipelineState(TypedDict, total=False):
     # ─── Activity log ───
     activity_log: Annotated[list[ActivityEvent], _append_list]  # All events for the WebSocket feed
 
-    # ─── Budget tracking ───
+    # ─── Budget tracking (Dev 4) ───
+    token_budget: Annotated[Optional[dict], _replace]  # Serialized TokenBudget
     total_tokens_used: Annotated[int, _replace]
     total_cost_usd: Annotated[float, _replace]
+    budget_exceeded: Annotated[bool, _replace]
