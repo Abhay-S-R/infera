@@ -75,7 +75,7 @@ async def strategist_node(state: PipelineState) -> dict:
     history_block = ""
     profile = state.get("competitor_profile")
     if profile:
-        history_block = "\\n\\n" + competitor_profile_prompt_block(profile) + "\\n"
+        history_block = "\n\n" + competitor_profile_prompt_block(profile) + "\n"
 
     # Construct the user prompt
     prompt = f"""

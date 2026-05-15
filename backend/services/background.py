@@ -133,6 +133,7 @@ async def _complete_workflow(
                 report_output,
                 workflow_id=workflow_id,
                 competitor=competitor_name,
+                pdf_path=pdf_path,
             )
         except Exception as exc:
             logger.warning(

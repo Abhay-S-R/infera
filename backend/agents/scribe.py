@@ -113,13 +113,15 @@ Please generate the 4 final targeted briefs based on this intelligence.
         
         # Post-process: Append CEO Q&A to Executive Brief
         if analysis.ceo_qa_pairs:
-            qa_text = "\\n\\n## Likely CEO Questions\\n"
+            qa_text = "\n\n## Likely CEO Questions\n"
             for qa in analysis.ceo_qa_pairs:
                 conf = str(qa.confidence).lower()
                 marker = "❓ **SPECULATIVE:** "
-                if "confirmed" in conf: marker = "✅ **CONFIRMED:** "
-                elif "inferred" in conf: marker = "⚠️ *INFERRED:* "
-                qa_text += f"**Q: {qa.question}**\\n{marker}{qa.answer}\\n\\n"
+                if "confirmed" in conf:
+                    marker = "✅ **CONFIRMED:** "
+                elif "inferred" in conf:
+                    marker = "⚠️ *INFERRED:* "
+                qa_text += f"**Q: {qa.question}**\n{marker}{qa.answer}\n\n"
             report.exec_brief += qa_text
             
         # Post-process: simple confidence marker enforcement if the LLM missed it

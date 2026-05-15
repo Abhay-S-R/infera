@@ -4,8 +4,10 @@ All team members: import settings from here, never read os.environ directly.
 """
 from pathlib import Path
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Always load ascent/.env regardless of current working directory (e.g. demo/fixtures).
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -29,8 +31,16 @@ class Settings(BaseSettings):
     OMIUM_API_KEY: Optional[str] = None
     OMIUM_ENDPOINT: str = "https://api.omium.dev"
     OMIUM_WORKSPACE: str = "ascent"
-    SLACK_WEBHOOK_URL: Optional[str] = None
-    
+    SLACK_WEBHOOK_URL: Optional[str] = Field(
+        default=None,
+        description="Slack Incoming Webhook URL (https://hooks.slack.com/services/...).",
+    )
+
+    OUTBOUND_WEBHOOK_URL: Optional[str] = Field(
+        default=None,
+        description="Optional HTTPS URL for a generic JSON POST on report completion (Zapier, etc.).",
+    )
+
     # Delivery Integrations
     LINEAR_API_KEY: Optional[str] = None
     LINEAR_TEAM_ID: Optional[str] = None

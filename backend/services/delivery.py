@@ -1,10 +1,17 @@
 """
-ASCENT Delivery — real external side-effect after Scribe completes.
+ASCENT Delivery — external side-effects after Scribe completes.
 
-Sends the executive brief to the CEO inbox via SendGrid when configured.
-Falls back to structured logging in demo mode so the pipeline never blocks.
+Channels (all optional, independent):
+- SendGrid: full executive brief email
+- Slack Incoming Webhook: short summary + preview
+- Generic OUTBOUND_WEBHOOK_URL: JSON payload for Zapier / Teams / etc.
+
+Failures never block the pipeline; each channel is best-effort.
 """
 from __future__ import annotations
+
+import json
+from typing import Any
 
 import httpx
 
@@ -17,6 +24,8 @@ logger = get_logger("delivery")
 
 SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
+_EXEC_PREVIEW_MAX = 800
+
 
 def _exec_body(report: ReportOutput) -> str:
     if report.exec_brief:
@@ -24,45 +33,48 @@ def _exec_body(report: ReportOutput) -> str:
     return ""
 
 
-async def deliver_report(
+def _truncate(text: str, max_chars: int = _EXEC_PREVIEW_MAX) -> str:
+    t = (text or "").strip()
+    if len(t) <= max_chars:
+        return t
+    return t[: max_chars - 1] + "…"
+
+
+def _sendgrid_configured() -> bool:
+    return bool(
+        (settings.SENDGRID_API_KEY or "").strip()
+        and (settings.SENDGRID_FROM_EMAIL or "").strip()
+        and (settings.CEO_EMAIL or "").strip()
+)
+
+
+async def _deliver_sendgrid(
     report: ReportOutput,
     *,
     workflow_id: str,
-    competitor: str | None = None,
-) -> dict[str, object]:
-    """
-    Deliver the CEO executive brief via SendGrid.
-
-    Returns a dict with channel, success, and optional error for persistence/logging.
-    """
-    subject = f"[ASCENT] CEO Brief: {report.title}"
-    body = _exec_body(report)
-    competitor_line = competitor or "Unknown competitor"
-
+    competitor_line: str,
+    body: str,
+) -> dict[str, Any]:
+    """Email executive brief via SendGrid."""
     api_key = (settings.SENDGRID_API_KEY or "").strip()
     from_email = (settings.SENDGRID_FROM_EMAIL or "").strip()
     to_email = (settings.CEO_EMAIL or "").strip()
 
     if not api_key or not from_email or not to_email:
         logger.info(
-            "delivery_skipped_demo",
+            "delivery_skipped",
+            channel="sendgrid",
             workflow_id=workflow_id,
             reason="SendGrid or CEO email not configured",
         )
-        await publish_event("delivery.completed", {
-            "workflow_id": workflow_id,
-            "channel": "sendgrid",
-            "success": False,
-            "demo_mode": True,
-            "message": "Delivery skipped (configure SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, CEO_EMAIL)",
-        })
         return {
             "channel": "sendgrid",
             "success": False,
-            "demo_mode": True,
-            "message": "SendGrid not configured — demo mode",
+            "skipped": True,
+            "message": "SendGrid not configured (set SENDGRID_API_KEY, SENDGRID_FROM_EMAIL, CEO_EMAIL)",
         }
 
+    subject = f"[ASCENT] CEO Brief: {report.title}"
     payload = {
         "personalizations": [{"to": [{"email": to_email}]}],
         "from": {"email": from_email, "name": "ASCENT Intelligence"},
@@ -97,42 +109,244 @@ async def deliver_report(
             response.raise_for_status()
 
         logger.info(
-            "delivery_sent",
+            "delivery_channel_ok",
+            channel="sendgrid",
             workflow_id=workflow_id,
             to=to_email,
             title=report.title,
         )
-        await publish_event("delivery.completed", {
-            "workflow_id": workflow_id,
-            "channel": "sendgrid",
-            "success": True,
-            "message": f"CEO brief emailed to {to_email}",
-        })
         return {
             "channel": "sendgrid",
             "success": True,
+            "skipped": False,
             "to": to_email,
             "message": f"CEO brief emailed to {to_email}",
         }
 
     except httpx.HTTPStatusError as exc:
         err = f"SendGrid HTTP {exc.response.status_code}: {exc.response.text[:200]}"
-        logger.error("delivery_failed", workflow_id=workflow_id, error=err)
-        await publish_event("delivery.completed", {
-            "workflow_id": workflow_id,
-            "channel": "sendgrid",
-            "success": False,
-            "message": err,
-        })
-        return {"channel": "sendgrid", "success": False, "error": err}
+        logger.error("delivery_channel_failed", channel="sendgrid", workflow_id=workflow_id, error=err)
+        return {"channel": "sendgrid", "success": False, "skipped": False, "error": err, "message": err}
 
     except Exception as exc:
         err = str(exc)[:300]
-        logger.error("delivery_failed", workflow_id=workflow_id, error=err)
-        await publish_event("delivery.completed", {
-            "workflow_id": workflow_id,
-            "channel": "sendgrid",
+        logger.error("delivery_channel_failed", channel="sendgrid", workflow_id=workflow_id, error=err)
+        return {"channel": "sendgrid", "success": False, "skipped": False, "error": err, "message": err}
+
+
+async def _deliver_slack(
+    report: ReportOutput,
+    *,
+    workflow_id: str,
+    competitor_line: str,
+    body: str,
+    pdf_path: str | None,
+) -> dict[str, Any]:
+    """Post summary to Slack Incoming Webhook."""
+    url = (settings.SLACK_WEBHOOK_URL or "").strip()
+    if not url:
+        return {
+            "channel": "slack",
             "success": False,
-            "message": err,
-        })
-        return {"channel": "sendgrid", "success": False, "error": err}
+            "skipped": True,
+            "message": "Slack not configured (set SLACK_WEBHOOK_URL)",
+        }
+
+    preview = _truncate(body)
+
+    slack_payload: dict[str, Any] = {
+        "text": f"ASCENT: {report.title} ({competitor_line}, {report.confidence_score:.0%})",
+        "blocks": [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": "ASCENT — report ready", "emoji": True},
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": (
+                        f"*Title:* {report.title}\n"
+                        f"*Competitor:* {competitor_line}\n"
+                        f"*Confidence:* {report.confidence_score:.0%}\n"
+                        f"*Workflow:* `{workflow_id}`"
+                        + (f"\n*PDF path:* `{pdf_path}`" if pdf_path else "")
+                    ),
+                },
+            },
+            {"type": "divider"},
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Executive preview:*\n{preview}"},
+            },
+        ],
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(url, json=slack_payload)
+            # Slack returns 200 with body "ok"
+            response.raise_for_status()
+
+        logger.info("delivery_channel_ok", channel="slack", workflow_id=workflow_id, title=report.title)
+        return {
+            "channel": "slack",
+            "success": True,
+            "skipped": False,
+            "message": "Posted to Slack Incoming Webhook",
+        }
+
+    except httpx.HTTPStatusError as exc:
+        err = f"Slack HTTP {exc.response.status_code}: {exc.response.text[:200]}"
+        logger.error("delivery_channel_failed", channel="slack", workflow_id=workflow_id, error=err)
+        return {"channel": "slack", "success": False, "skipped": False, "error": err, "message": err}
+
+    except Exception as exc:
+        err = str(exc)[:300]
+        logger.error("delivery_channel_failed", channel="slack", workflow_id=workflow_id, error=err)
+        return {"channel": "slack", "success": False, "skipped": False, "error": err, "message": err}
+
+
+async def _deliver_outbound_webhook(
+    report: ReportOutput,
+    *,
+    workflow_id: str,
+    competitor_line: str,
+    body: str,
+    pdf_path: str | None,
+) -> dict[str, Any]:
+    """POST JSON to a generic URL (Zapier, Discord, custom receiver)."""
+    url = (settings.OUTBOUND_WEBHOOK_URL or "").strip()
+    if not url:
+        return {
+            "channel": "outbound_webhook",
+            "success": False,
+            "skipped": True,
+            "message": "Generic webhook not configured (set OUTBOUND_WEBHOOK_URL)",
+        }
+
+    payload = {
+        "event": "report.completed",
+        "workflow_id": workflow_id,
+        "competitor": competitor_line,
+        "title": report.title,
+        "confidence": report.confidence_score,
+        "exec_preview": _truncate(body, max_chars=2000),
+        "pdf_path": pdf_path,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                content=json.dumps(payload),
+            )
+            response.raise_for_status()
+
+        logger.info("delivery_channel_ok", channel="outbound_webhook", workflow_id=workflow_id)
+        return {
+            "channel": "outbound_webhook",
+            "success": True,
+            "skipped": False,
+            "message": "POST accepted by OUTBOUND_WEBHOOK_URL",
+        }
+
+    except httpx.HTTPStatusError as exc:
+        err = f"Outbound webhook HTTP {exc.response.status_code}: {exc.response.text[:200]}"
+        logger.error(
+            "delivery_channel_failed", channel="outbound_webhook", workflow_id=workflow_id, error=err
+        )
+        return {"channel": "outbound_webhook", "success": False, "skipped": False, "error": err, "message": err}
+
+    except Exception as exc:
+        err = str(exc)[:300]
+        logger.error(
+            "delivery_channel_failed", channel="outbound_webhook", workflow_id=workflow_id, error=err
+        )
+        return {"channel": "outbound_webhook", "success": False, "skipped": False, "error": err, "message": err}
+
+
+def _delivery_summary(channels: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for c in channels:
+        ch = c.get("channel", "?")
+        if c.get("skipped"):
+            parts.append(f"{ch}: skipped")
+        elif c.get("success"):
+            parts.append(f"{ch}: ✓")
+        else:
+            parts.append(f"{ch}: ✗")
+    return " · ".join(parts) if parts else "no channels"
+
+
+async def deliver_report(
+    report: ReportOutput,
+    *,
+    workflow_id: str,
+    competitor: str | None = None,
+    pdf_path: str | None = None,
+) -> dict[str, object]:
+    """
+    Run all configured delivery channels (SendGrid, Slack, generic webhook).
+
+    Returns a dict with ``channels`` (list of per-channel results), ``summary``,
+    and backward-compatible ``success`` (any channel succeeded).
+    """
+    body = _exec_body(report)
+    competitor_line = competitor or "Unknown competitor"
+
+    channels: list[dict[str, Any]] = []
+
+    channels.append(
+        await _deliver_sendgrid(report, workflow_id=workflow_id, competitor_line=competitor_line, body=body)
+    )
+    channels.append(
+        await _deliver_slack(
+            report,
+            workflow_id=workflow_id,
+            competitor_line=competitor_line,
+            body=body,
+            pdf_path=pdf_path,
+        )
+    )
+    channels.append(
+        await _deliver_outbound_webhook(
+            report,
+            workflow_id=workflow_id,
+            competitor_line=competitor_line,
+            body=body,
+            pdf_path=pdf_path,
+        )
+    )
+
+    any_success = any(c.get("success") for c in channels)
+    # demo_mode: no integration keys/URLs configured at all
+    sendgrid_ok = _sendgrid_configured()
+    slack_ok = bool((settings.SLACK_WEBHOOK_URL or "").strip())
+    outbound_ok = bool((settings.OUTBOUND_WEBHOOK_URL or "").strip())
+    demo_mode = not (sendgrid_ok or slack_ok or outbound_ok)
+
+    summary = _delivery_summary(channels)
+
+    await publish_event(
+        "delivery.completed",
+        {
+            "workflow_id": workflow_id,
+            "channels": channels,
+            "summary": summary,
+            "success": any_success,
+            "demo_mode": demo_mode,
+            "message": summary if not demo_mode else "No delivery channels configured — demo mode",
+        },
+    )
+
+    return {
+        "channels": channels,
+        "summary": summary,
+        "success": any_success,
+        "demo_mode": demo_mode,
+        # Backward compatibility for single-channel consumers
+        "channel": "multi",
+        "message": summary,
+    }

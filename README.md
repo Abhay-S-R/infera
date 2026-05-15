@@ -205,7 +205,8 @@ ascent/
 | `DATABASE_URL` | No | `postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db` | PostgreSQL connection string |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Redis connection string |
 | `OMIUM_API_KEY` | No | — | Omium observability tracing key |
-| `SLACK_WEBHOOK_URL` | No | — | Slack webhook for report notifications |
+| `SLACK_WEBHOOK_URL` | No | — | Slack Incoming Webhook — summary posted when a report completes |
+| `OUTBOUND_WEBHOOK_URL` | No | — | Generic JSON POST URL (Zapier, Teams, etc.) on report completion |
 | `DEMO_MODE` | No | `false` | When `true`, uses cached responses instead of live APIs |
 | `LOG_LEVEL` | No | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
 | `MAX_TOKENS_PER_WORKFLOW` | No | `500000` | Maximum token budget per pipeline execution |
