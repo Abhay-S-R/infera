@@ -17,6 +17,13 @@ from backend.services.logger import get_logger
 logger = get_logger("dispatcher")
 
 
+def _budget_stopped(result: dict) -> bool:
+    if result.get("budget_exceeded"):
+        return True
+    err = result.get("error") or ""
+    return "budget exceeded" in err.lower()
+
+
 async def _complete_workflow(
     session,
     workflow: Workflow,
@@ -24,8 +31,10 @@ async def _complete_workflow(
     workflow_id: str,
     webhook_id: int,
 ) -> None:
-    """Persist report and mark workflow completed."""
+    """Persist report, token usage, and mark workflow completed."""
     report_output = result.get("report_output")
+    budget_stopped = _budget_stopped(result)
+
     if report_output:
         report = Report(
             workflow_id=workflow.id,
@@ -37,8 +46,15 @@ async def _complete_workflow(
         )
         session.add(report)
 
-    workflow.status = "completed"
+    workflow.status = "budget_exceeded" if budget_stopped else "completed"
     workflow.current_agent = "done"
+    workflow.tokens_used = result.get("total_tokens_used", 0) or 0
+    workflow.estimated_cost = result.get("total_cost_usd", 0.0) or 0.0
+    if budget_stopped:
+        workflow.extra_data = {
+            **(workflow.extra_data or {}),
+            "budget_error": result.get("error"),
+        }
     session.add(workflow)
     await session.commit()
 
@@ -46,13 +62,24 @@ async def _complete_workflow(
         "pipeline_completed",
         workflow_id=workflow_id,
         report_title=report_output.title if report_output else "No report",
+        tokens_used=workflow.tokens_used,
+        estimated_cost=workflow.estimated_cost,
+    )
+
+    completion_status = "budget_exceeded" if budget_stopped else "completed"
+    completion_message = (
+        result.get("error", "Token budget exceeded")
+        if budget_stopped
+        else (f"Report generated: {report_output.title}" if report_output else "Pipeline completed")
     )
 
     await publish_event("workflow.completed", {
         "workflow_id": workflow_id,
         "webhook_id": webhook_id,
-        "status": "completed",
-        "message": f"Report generated: {report_output.title}" if report_output else "Pipeline completed",
+        "status": completion_status,
+        "message": completion_message,
+        "tokens_used": workflow.tokens_used,
+        "estimated_cost": workflow.estimated_cost,
     })
 
 

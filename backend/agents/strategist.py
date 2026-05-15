@@ -4,6 +4,8 @@ Dev 4 owns this file.
 """
 from backend.services.logger import get_logger
 from backend.services.llm import generate_structured
+from backend.services.budget import check_budget_or_stop, get_budget
+from backend.services.context import summarize_for_next_agent, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
 
@@ -25,12 +27,21 @@ async def strategist_node(state: PipelineState) -> dict:
     Analysis agent — synthesizes research into competitive analysis.
     """
     signal = state.get("signal")
-    research = state.get("research_output")
     workflow_id = state.get("workflow_id", "unknown")
 
     # Bind workflow_id to logger
     log = logger.with_context(workflow_id=workflow_id)
     log.info("strategist_started", signal_title=signal.title)
+
+    stopped = check_budget_or_stop(state, "strategist", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
+
+    budget = get_budget(state)
+    ctx_state = await summarize_for_next_agent(state, "strategist", budget=budget)
+    research = ctx_state.get("research_output") or state.get("research_output")
+    tier = budget.tier()
 
     # If there's no research output, we can't do much
     if not research or not research.key_findings:
@@ -61,11 +72,7 @@ Source: {signal.source}
 Content/Context: {signal.content or 'None'}
 
 RESEARCH FINDINGS (Evidence gathered):
-Key Findings:
-{chr(10).join(f"- {f}" for f in research.key_findings)}
-
-Raw Content Summary:
-{research.raw_content_summary}
+{research_prompt_block(research, tier=tier)}
 
 Based on the above, produce a complete competitive analysis.
 """
@@ -74,12 +81,14 @@ Based on the above, produce a complete competitive analysis.
     
     try:
         # Call the LLM
-        analysis: AnalysisOutput = await generate_structured(
+        analysis, _usage = await generate_structured(
             prompt=prompt,
             response_model=AnalysisOutput,
             system=SYSTEM_PROMPT,
-            temperature=0.3, # Low temp for analytical consistency
-            max_output_tokens=8192
+            temperature=0.3,
+            max_output_tokens=8192,
+            budget=budget,
+            agent="strategist",
         )
         
         log.info("strategist_completed", confidence=analysis.overall_confidence)
@@ -87,6 +96,7 @@ Based on the above, produce a complete competitive analysis.
         return {
             "analysis_output": analysis,
             "current_agent": "strategist",
+            **budget.state_updates(),
             "activity_log": [ActivityEvent(
                 agent="strategist",
                 status=AgentStatus.DONE,

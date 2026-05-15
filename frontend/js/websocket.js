@@ -19,12 +19,20 @@ function initWebSocket() {
                 try {
                     const data = JSON.parse(event.data);
                     
+                    // Handle the nested format: {"type": "activity", "payload": {"agent": "scout", "status": "running", "message": "..."}}
+                    let payload = data;
+                    if (data.type === 'activity' && data.payload) {
+                        payload = data.payload;
+                    }
+
                     if (window.addActivityEvent) {
-                        window.addActivityEvent(data);
+                        window.addActivityEvent(payload);
                     }
                     
-                    if (data.node && data.status && typeof updatePipelineStatus === 'function') {
-                        updatePipelineStatus(data.node, data.status);
+                    // Allow either node or agent key for pipeline status
+                    const agentName = payload.agent || payload.node;
+                    if (agentName && payload.status && typeof updatePipelineStatus === 'function') {
+                        updatePipelineStatus(agentName, payload.status);
                     }
                 } catch (e) {
                     console.error('Error parsing WebSocket message', e);

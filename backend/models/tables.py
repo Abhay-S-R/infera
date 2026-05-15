@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, Column, Integer, String, Text, JSON, DateTime, func
+from sqlalchemy import Boolean, Column, Integer, String, Text, JSON, DateTime, Float, func
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -25,6 +25,8 @@ class Workflow(Base):
     status = Column(String(32), nullable=False, default="pending")
     current_agent = Column(String(64), nullable=True)
     extra_data = Column(JSON, nullable=True)
+    tokens_used = Column(Integer, nullable=True, default=0)
+    estimated_cost = Column(Float, nullable=True, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

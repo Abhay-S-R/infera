@@ -1,125 +1,50 @@
-// frontend/js/app.js
-
-class App {
-    constructor() {
-        this.init();
-    }
-
-    init() {
-        window.addEventListener('hashchange', () => this.handleRouting());
-        this.handleRouting();
-        
-        if (typeof initWebSocket === 'function') {
-            initWebSocket();
-        }
-        
-        if (typeof initPipeline === 'function') {
-            initPipeline();
-        }
-
-        if (typeof initReports === 'function') {
-            initReports();
-        }
-
-        this.setupSidebarNavigation();
-        this.setupManualTriggerForm();
-    }
-
-    handleRouting() {
-        const hash = window.location.hash || '#dashboard';
-        const pageName = hash.substring(1);
-        
-        const titleElement = document.querySelector('.page-title');
-        if (titleElement) {
-            titleElement.textContent = pageName.charAt(0).toUpperCase() + pageName.slice(1);
-        }
-
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            const text = item.textContent.trim().toLowerCase();
-            if (text === pageName) {
-                item.classList.add('active');
-            } else {
-                item.classList.remove('active');
-            }
-        });
-        
-        // Toggle page sections
-        const pages = document.querySelectorAll('.page-section');
-        pages.forEach(page => {
-            if (page.id === `page-${pageName}`) {
-                page.style.display = 'block';
-                // If it's reports, fetch again just in case
-                if (pageName === 'reports' && window.reportsManager) {
-                    window.reportsManager.fetchReports();
-                    window.reportsManager.backToList();
-                }
-            } else {
-                page.style.display = 'none';
-            }
-        });
-    }
-
-    setupSidebarNavigation() {
-        const navItems = document.querySelectorAll('.nav-item');
-        navItems.forEach(item => {
-            item.addEventListener('click', (e) => {
-                const text = e.currentTarget.textContent.trim().toLowerCase();
-                window.location.hash = `#${text}`;
-            });
-        });
-    }
-
-    setupManualTriggerForm() {
-        const form = document.getElementById('analyze-form');
-        if (!form) return;
-        
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const competitorName = document.getElementById('competitor-name').value;
-            const question = document.getElementById('analyze-question').value;
-            const submitBtn = form.querySelector('button[type="submit"]');
-            
-            const originalText = submitBtn.innerHTML;
-            submitBtn.innerHTML = '<i class="ph ph-spinner ph-spin"></i> Launching...';
-            submitBtn.disabled = true;
-            
-            try {
-                // Post to API
-                const response = await fetch('http://localhost:8000/api/analyze', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        competitor: competitorName,
-                        question: question
-                    })
-                });
-                
-                if (!response.ok) throw new Error('Failed to start analysis');
-                
-                // Add a local activity event
-                if (window.addActivityEvent) {
-                    window.addActivityEvent({
-                        agent: 'System',
-                        status: 'success',
-                        message: `Started analysis for ${competitorName}: "${question}"`
-                    });
-                }
-                
-                form.reset();
-            } catch (err) {
-                console.error(err);
-                alert('Error starting analysis: ' + err.message);
-            } finally {
-                submitBtn.innerHTML = originalText;
-                submitBtn.disabled = false;
-            }
-        });
-    }
-}
-
+// app.js
 document.addEventListener('DOMContentLoaded', () => {
-    window.app = new App();
+    const video = document.getElementById('hero-video');
+    const navbar = document.getElementById('navbar');
+    
+    // 1. Handle video end state
+    if (video) {
+        video.addEventListener('ended', () => {
+            // Pause on last frame (default behavior if no loop)
+            // Add faded class for decreased opacity
+            video.classList.add('faded');
+        });
+
+        // Ensure video plays (browsers sometimes block autoplay)
+        video.play().catch(e => console.log("Autoplay blocked:", e));
+    }
+
+    // 2. Navbar scroll effect
+    window.addEventListener('scroll', () => {
+        if (window.scrollY > 50) {
+            navbar.style.background = 'rgba(0, 0, 0, 0.8)';
+            navbar.style.padding = '1rem 4rem';
+        } else {
+            navbar.style.background = 'rgba(0, 0, 0, 0.2)';
+            navbar.style.padding = '1.5rem 4rem';
+        }
+    });
+
+    // 3. Simple Reveal on Scroll Animation
+    const observerOptions = {
+        threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+                observer.unobserve(entry.target);
+            }
+        });
+    }, observerOptions);
+
+    document.querySelectorAll('.feature-card, .large-text-section').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(40px)';
+        el.style.transition = 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+        observer.observe(el);
+    });
 });

@@ -19,6 +19,7 @@ from backend.models.schemas import (
     AgentStatus,
 )
 from backend.services.llm import generate, generate_structured
+from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.agents.state import PipelineState
@@ -73,6 +74,13 @@ async def scout_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("scout_started", title=signal.title)
 
+    stopped = check_budget_or_stop(state, "scout", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
+
+    budget = get_budget(state)
+
     await publish_event("agent_activity", {
         "agent": "scout",
         "status": "running",
@@ -86,7 +94,7 @@ async def scout_node(state: PipelineState) -> dict:
         queries = retry_queries
         wf_logger.info("scout_using_retry_queries", queries=queries)
     else:
-        queries = await _generate_queries(signal, sentinel_output, num_queries=4)
+        queries = await _generate_queries(signal, sentinel_output, num_queries=4, budget=budget)
         wf_logger.info("scout_queries_generated", queries=queries)
 
     await publish_event("agent_activity", {
@@ -143,12 +151,14 @@ async def scout_node(state: PipelineState) -> dict:
     synthesis_prompt = _build_synthesis_prompt(signal, sentinel_output, all_results, scraped_content)
 
     try:
-        research_output: ResearchOutput = await generate_structured(
+        research_output, _usage = await generate_structured(
             prompt=synthesis_prompt,
             response_model=ResearchOutput,
             system=SYNTHESIS_SYSTEM_PROMPT,
             temperature=0.4,
             max_output_tokens=8192,
+            budget=budget,
+            agent="scout",
         )
 
         # Override with actual data
@@ -173,6 +183,7 @@ async def scout_node(state: PipelineState) -> dict:
             "research_output": research_output,
             "current_agent": "scout",
             "retry_count": retry_count + 1 if retry_count > 0 else retry_count,
+            **budget.state_updates(),
             "activity_log": [ActivityEvent(
                 agent="scout",
                 status=AgentStatus.DONE,
@@ -212,7 +223,10 @@ async def scout_node(state: PipelineState) -> dict:
 
 
 async def _generate_queries(
-    signal, sentinel_output: SentinelOutput, num_queries: int = 4
+    signal,
+    sentinel_output: SentinelOutput,
+    num_queries: int = 4,
+    budget=None,
 ) -> list[str]:
     """Generate targeted search queries based on the signal and sentinel analysis."""
     prompt = (
@@ -227,11 +241,13 @@ async def _generate_queries(
     prompt += f"\nGenerate {num_queries} diverse search queries for competitive intelligence research."
 
     try:
-        raw = await generate(
+        raw, _usage = await generate(
             prompt=prompt,
             system=QUERY_GENERATION_PROMPT.format(num_queries=num_queries),
             temperature=0.5,
             model="llama-3.3-70b-versatile",
+            budget=budget,
+            agent="scout",
         )
         # Parse the JSON array from the response
         import json
