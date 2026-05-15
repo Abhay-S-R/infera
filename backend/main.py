@@ -1,16 +1,22 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.api import analyze, competitors, reports, websocket, webhooks
 from backend.config import settings
-from backend.models.database import init_db
+from backend.models.database import (
+    check_database_connection,
+    init_db,
+    is_database_available,
+    set_database_available,
+)
 from backend.services.background import resume_interrupted_workflows
-from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
-from backend.services.logger import configure_logging
+from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer  # async
+from backend.services.logger import configure_logging, get_logger
 from backend.services.scheduler import start_scheduler, stop_scheduler
 
-
 configure_logging()
+logger = get_logger("main")
 
 app = FastAPI(title="ASCENT Backend")
 app.add_middleware(
@@ -26,6 +32,20 @@ app.include_router(analyze.router)
 app.include_router(reports.router)
 app.include_router(competitors.router)
 app.include_router(websocket.router)
+
+_DB_REQUIRED_PREFIXES = ("/api/", "/webhooks/")
+
+
+@app.middleware("http")
+async def database_availability_middleware(request: Request, call_next):
+    """Return 503 for API/webhook routes when Postgres is down."""
+    if request.url.path.startswith(_DB_REQUIRED_PREFIXES):
+        if not await is_database_available():
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "Database unavailable"},
+            )
+    return await call_next(request)
 
 
 @app.on_event("startup")
@@ -43,5 +63,11 @@ async def on_shutdown() -> None:
 
 
 @app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
+async def health():
+    """Liveness check — 503 when Postgres is unreachable."""
+    if await is_database_available():
+        return {"status": "ok", "database": "up"}
+    return JSONResponse(
+        status_code=503,
+        content={"status": "unavailable", "database": "down"},
+    )

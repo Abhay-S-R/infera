@@ -2,21 +2,43 @@ import asyncio
 import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from redis.exceptions import RedisError
+
 from backend.services.events import create_redis, get_pubsub_channel
+from backend.services.logger import get_logger
 
 router = APIRouter()
+logger = get_logger("websocket")
 
 
 @router.websocket("/ws/activity")
 async def activity_feed(websocket: WebSocket) -> None:
     await websocket.accept()
-    redis = create_redis()
-    pubsub = redis.pubsub()
-    await pubsub.subscribe(get_pubsub_channel())
+
+    try:
+        redis = create_redis()
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(get_pubsub_channel())
+    except (RedisError, ConnectionError, OSError) as exc:
+        logger.warning("websocket_redis_unavailable", error=str(exc)[:200])
+        try:
+            await websocket.send_json({
+                "type": "error",
+                "payload": {"message": "Activity feed unavailable (Redis down)"},
+            })
+        except Exception:
+            pass
+        await websocket.close(code=1013)
+        return
 
     try:
         while True:
-            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            try:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+            except (RedisError, ConnectionError, OSError) as exc:
+                logger.warning("websocket_redis_read_failed", error=str(exc)[:200])
+                break
+
             if message and message["type"] == "message":
                 payload = message["data"]
                 if isinstance(payload, bytes):
@@ -30,6 +52,9 @@ async def activity_feed(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        await pubsub.unsubscribe(get_pubsub_channel())
-        await pubsub.close()
-        await redis.close()
+        try:
+            await pubsub.unsubscribe(get_pubsub_channel())
+            await pubsub.close()
+            await redis.close()
+        except Exception:
+            pass

@@ -25,6 +25,9 @@ os.environ["DATABASE_URL_SYNC"] = os.environ.get(
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 PASS = "[PASS]"
 FAIL = "[FAIL]"
 results: list[tuple[str, bool]] = []
@@ -66,11 +69,11 @@ async def test_database_and_tables() -> bool:
 async def test_checkpointer_setup() -> bool:
     from backend.services.checkpointer import init_checkpointer, get_checkpointer, shutdown_checkpointer
 
-    saver = init_checkpointer()
+    saver = await init_checkpointer()
     same = get_checkpointer()
     ok = saver is same and saver is not None
 
-    shutdown_checkpointer()
+    await shutdown_checkpointer()
     log("PostgresSaver init + setup", ok, "Checkpointer tables ready")
     return ok
 
@@ -79,12 +82,12 @@ async def test_graph_compiles_with_checkpointer() -> bool:
     from backend.agents.graph import build_graph, pipeline_config
     from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
 
-    checkpointer = init_checkpointer()
+    checkpointer = await init_checkpointer()
     graph = build_graph(checkpointer=checkpointer)
     config = pipeline_config("test-thread-123")
     ok = graph is not None and config["configurable"]["thread_id"] == "test-thread-123"
 
-    shutdown_checkpointer()
+    await shutdown_checkpointer()
     log("build_graph(checkpointer=...) compiles", ok)
     return ok
 
@@ -97,7 +100,7 @@ async def test_competitors_api_crud() -> bool:
     from backend.services.scheduler import stop_scheduler
 
     await init_db()
-    init_checkpointer()
+    await init_checkpointer()
     unique = f"TestCo_{uuid.uuid4().hex[:8]}"
 
     try:
@@ -136,7 +139,7 @@ async def test_competitors_api_crud() -> bool:
             return ok
     finally:
         stop_scheduler()
-        shutdown_checkpointer()
+        await shutdown_checkpointer()
 
 
 async def test_scheduler_registers_job() -> bool:
@@ -164,7 +167,7 @@ async def test_resume_interrupted_workflows() -> bool:
     from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
 
     await init_db()
-    init_checkpointer()
+    await init_checkpointer()
 
     async with AsyncSessionLocal() as session:
         webhook = WebhookEvent(
@@ -210,7 +213,7 @@ async def test_resume_interrupted_workflows() -> bool:
             await session.delete(wh)
         await session.commit()
 
-    shutdown_checkpointer()
+    await shutdown_checkpointer()
     log("resume_interrupted_workflows()", ok, f"Resumed workflow id={workflow_id}")
     return ok
 
@@ -221,7 +224,7 @@ async def test_checkpoint_tables_exist() -> bool:
     from backend.config import settings
     from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
 
-    init_checkpointer()
+    await init_checkpointer()
     tables: list[str] = []
     try:
         with psycopg.connect(settings.DATABASE_URL_SYNC) as conn:
@@ -236,7 +239,7 @@ async def test_checkpoint_tables_exist() -> bool:
                 )
                 tables = [row[0] for row in cur.fetchall()]
     finally:
-        shutdown_checkpointer()
+        await shutdown_checkpointer()
 
     ok = len(tables) > 0
     log("LangGraph checkpoint tables in Postgres", ok, ", ".join(tables) or "none found")
