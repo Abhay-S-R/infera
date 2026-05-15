@@ -114,8 +114,8 @@ class TestAgentTracing:
         import inspect
         
         source = inspect.getsource(sentinel_node)
-        assert "get_tracer()" in source, "sentinel_node must call get_tracer()"
-        assert "start_span" in source, "sentinel_node must use start_span"
+        source = inspect.getsource(sentinel_node)
+        assert "@trace_agent" in source, "sentinel_node must be decorated with @trace_agent"
     
     def test_scout_node_imports_tracer(self):
         """Verify scout_node imports and uses tracer."""
@@ -123,8 +123,8 @@ class TestAgentTracing:
         import inspect
         
         source = inspect.getsource(scout_node)
-        assert "get_tracer()" in source, "scout_node must call get_tracer()"
-        assert "start_span" in source, "scout_node must use start_span"
+        source = inspect.getsource(scout_node)
+        assert "@trace_agent" in source, "scout_node must be decorated with @trace_agent"
     
     def test_strategist_node_imports_tracer(self):
         """Verify strategist_node imports and uses tracer."""
@@ -132,8 +132,8 @@ class TestAgentTracing:
         import inspect
         
         source = inspect.getsource(strategist_node)
-        assert "get_tracer()" in source, "strategist_node must call get_tracer()"
-        assert "start_span" in source, "strategist_node must use start_span"
+        source = inspect.getsource(strategist_node)
+        assert "@trace_agent" in source, "strategist_node must be decorated with @trace_agent"
     
     def test_scribe_node_imports_tracer(self):
         """Verify scribe_node imports and uses tracer."""
@@ -141,8 +141,8 @@ class TestAgentTracing:
         import inspect
         
         source = inspect.getsource(scribe_node)
-        assert "get_tracer()" in source, "scribe_node must call get_tracer()"
-        assert "start_span" in source, "scribe_node must use start_span"
+        source = inspect.getsource(scribe_node)
+        assert "@trace_agent" in source, "scribe_node must be decorated with @trace_agent"
     
     def test_arbiter_node_imports_tracer(self):
         """Verify arbiter_node imports and uses tracer."""
@@ -150,8 +150,8 @@ class TestAgentTracing:
         import inspect
         
         source = inspect.getsource(arbiter_node)
-        assert "get_tracer()" in source, "arbiter_node must call get_tracer()"
-        assert "start_span" in source, "arbiter_node must use start_span"
+        source = inspect.getsource(arbiter_node)
+        assert "@trace_agent" in source, "arbiter_node must be decorated with @trace_agent"
 
 
 class TestOmiumSpanAttributes:

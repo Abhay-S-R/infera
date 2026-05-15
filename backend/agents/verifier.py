@@ -15,9 +15,10 @@ from backend.models.schemas import (
 )
 from pydantic import BaseModel, Field
 from backend.services.llm import generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
+from backend.services.budget import BudgetExceededError, check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
+from backend.services.tracing import trace_agent
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 
@@ -41,6 +42,7 @@ class VerificationResult(BaseModel):
     reasoning: str = Field(description="Why you consider it verified or unverified")
 
 
+@trace_agent("verifier")
 async def verifier_node(state: PipelineState) -> dict:
     """
     Verifier agent node for LangGraph.

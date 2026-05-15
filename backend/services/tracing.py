@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Any, Optional
 from backend.config import settings
 from backend.services.logger import get_logger
+import functools
+from typing import Callable, Any
 
 logger = get_logger("tracing")
 
@@ -98,3 +100,17 @@ def get_tracer():
         return _NoopTracer()
     
     return _TRACER_INSTANCE
+
+
+def trace_agent(name: str) -> Callable:
+    """Decorator to automatically trace agent nodes and extract workflow_id/retry."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(state, *args, **kwargs) -> Any:
+            tracer = get_tracer()
+            workflow_id = state.get("workflow_id", "unknown")
+            retry_count = state.get("retry_count", 0)
+            with tracer.start_span(name, workflow_id=workflow_id, retry=retry_count):
+                return await func(state, *args, **kwargs)
+        return wrapper
+    return decorator

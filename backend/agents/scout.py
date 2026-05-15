@@ -23,7 +23,7 @@ from backend.services.llm import generate, generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
-from backend.services.tracing import get_tracer
+from backend.services.tracing import trace_agent
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 from backend.agents.tools.url_scraper import scrape_url
@@ -62,6 +62,7 @@ You have just completed web research on a competitive signal. Your job is to:
 Be factual. Cite specifics (numbers, dates, names). Don't speculate — report what the sources say."""
 
 
+@trace_agent("scout")
 async def scout_node(state: PipelineState) -> dict:
     """
     Scout agent node for LangGraph.
@@ -84,22 +85,20 @@ async def scout_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("scout_started", title=signal.title)
 
-    tracer = get_tracer()
-    with tracer.start_span("scout", workflow_id=workflow_id, retry=retry_count):
-        stopped = check_budget_or_stop(state, "scout", workflow_id)
-        if stopped:
-            stopped["budget_exceeded"] = True
-            return stopped
+    stopped = check_budget_or_stop(state, "scout", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
 
-        budget = get_budget(state)
+    budget = get_budget(state)
 
-        await publish_event("agent_activity", {
-            "agent": "scout",
-            "status": "running",
-            "message": f"{'Re-researching' if retry_count > 0 else 'Researching'}: {signal.title[:80]}",
-            "detail": f"Retry #{retry_count}" if retry_count > 0 else "Initial research",
-            "workflow_id": workflow_id,
-        })
+    await publish_event("agent_activity", {
+        "agent": "scout",
+        "status": "running",
+        "message": f"{'Re-researching' if retry_count > 0 else 'Researching'}: {signal.title[:80]}",
+        "detail": f"Retry #{retry_count}" if retry_count > 0 else "Initial research",
+        "workflow_id": workflow_id,
+    })
 
     # ─── Setup Adaptive Loop ───
     MAX_SCOUT_LOOPS = 2

@@ -8,7 +8,8 @@ from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.context import prepare_for_strategist, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
-from backend.services.tracing import get_tracer
+from backend.services.tracing import trace_agent
+from backend.services.context import get_competitor_history
 
 logger = get_logger("strategist")
 
@@ -25,6 +26,7 @@ Rules:
 6. Generate 2-3 critical strategic questions for the CEO to consider based on this intelligence.
 """
 
+@trace_agent("strategist")
 async def strategist_node(state: PipelineState) -> dict:
     """
     Analysis agent — synthesizes research into competitive analysis.
@@ -36,12 +38,10 @@ async def strategist_node(state: PipelineState) -> dict:
     log = logger.with_context(workflow_id=workflow_id)
     log.info("strategist_started", signal_title=signal.title)
 
-    tracer = get_tracer()
-    with tracer.start_span("strategist", workflow_id=workflow_id):
-        stopped = check_budget_or_stop(state, "strategist", workflow_id)
-        if stopped:
-            stopped["budget_exceeded"] = True
-            return stopped
+    stopped = check_budget_or_stop(state, "strategist", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
 
     budget = get_budget(state)
     ctx_state, research_list, estimated_tokens = await prepare_for_strategist(state, budget)
@@ -70,12 +70,20 @@ async def strategist_node(state: PipelineState) -> dict:
             )]
         }
 
+    # Fetch competitor history if competitor is known
+    history_block = ""
+    if signal.competitor_name:
+        history = await get_competitor_history(signal.competitor_name, limit=3)
+        if history:
+            h_text = "\\n".join(f"- {r.title} ({r.created_at.strftime('%Y-%m-%d')})" for r in history)
+            history_block = f"\\n\\nCOMPETITOR HISTORY (Recent reports):\\n{h_text}\\n"
+
     # Construct the user prompt
     prompt = f"""
 SIGNAL (What happened):
 Title: {signal.title}
 Source: {signal.source}
-Content/Context: {signal.content or 'None'}
+Content/Context: {signal.content or 'None'}{history_block}
 
 RESEARCH FINDINGS (Evidence gathered from multiple parallel scouts):
 {research_prompt_block(research_list, tier=tier)}
