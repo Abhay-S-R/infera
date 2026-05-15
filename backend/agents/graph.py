@@ -78,12 +78,12 @@ def should_retry_or_proceed(state: PipelineState) -> str:
 
 # ─── Graph Builder ───
 
-def build_graph() -> StateGraph:
+def build_graph(checkpointer=None):
     """
     Build and compile the ASCENT agent pipeline graph.
 
     Returns a compiled LangGraph that can be invoked with:
-        result = await graph.ainvoke(initial_state)
+        result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": workflow_id}})
     """
     builder = StateGraph(PipelineState)
 
@@ -126,18 +126,31 @@ def build_graph() -> StateGraph:
     # Scribe → END
     builder.add_edge("scribe", END)
 
-    return builder.compile()
+    return builder.compile(checkpointer=checkpointer)
+
+
+def pipeline_config(workflow_id: str) -> dict:
+    """LangGraph config for checkpointing — thread_id maps to workflow id."""
+    return {"configurable": {"thread_id": workflow_id}}
 
 
 # ─── Convenience runner ───
 
-async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> PipelineState:
+async def run_pipeline(
+    signal: SignalInput | None = None,
+    workflow_id: str | None = None,
+    checkpointer=None,
+    *,
+    resume: bool = False,
+) -> PipelineState:
     """
     Run the full ASCENT pipeline for a given signal.
 
     Args:
-        signal: The incoming signal to process
-        workflow_id: Optional workflow ID (auto-generated if not provided)
+        signal: The incoming signal to process (not required when resume=True)
+        workflow_id: Workflow / checkpoint thread id (auto-generated if not provided)
+        checkpointer: LangGraph PostgresSaver for crash recovery
+        resume: If True, continue from the last checkpointed agent
 
     Returns:
         Final PipelineState with all agent outputs
@@ -145,7 +158,15 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
     if workflow_id is None:
         workflow_id = str(uuid.uuid4())
 
-    graph = build_graph()
+    graph = build_graph(checkpointer=checkpointer)
+    config = pipeline_config(workflow_id)
+
+    if resume:
+        result = await graph.ainvoke(None, config=config)
+        return result
+
+    if signal is None:
+        raise ValueError("signal is required when resume=False")
 
     initial_state: PipelineState = {
         "signal": signal,
@@ -160,5 +181,5 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
         "total_cost_usd": 0.0,
     }
 
-    result = await graph.ainvoke(initial_state)
+    result = await graph.ainvoke(initial_state, config=config)
     return result

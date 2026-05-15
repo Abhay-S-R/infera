@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Scheduling
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_INTERVAL_MINUTES: int = 5
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

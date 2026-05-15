@@ -137,3 +137,21 @@ class ActivityEvent(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     workflow_id: Optional[str] = None
     tokens_used: Optional[int] = None
+
+
+# ─── Competitors (scheduled scans) ───
+
+class CompetitorCreate(BaseModel):
+    name: str
+    industry: Optional[str] = None
+    keywords: list[str] = Field(default_factory=list)
+    active: bool = True
+
+
+class CompetitorResponse(BaseModel):
+    id: int
+    name: str
+    industry: Optional[str] = None
+    keywords: list[str] = Field(default_factory=list)
+    active: bool = True
+    created_at: datetime
