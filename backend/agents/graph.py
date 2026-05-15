@@ -25,6 +25,7 @@ from backend.agents.strategist import strategist_node
 from backend.agents.scribe import scribe_node
 from backend.agents.sentinel import sentinel_node
 from backend.agents.scout import scout_node
+from backend.services.budget import TokenBudget
 
 
 
@@ -57,8 +58,17 @@ async def arbiter_node(state: PipelineState) -> dict:
 
 # ─── Routing Logic ───
 
+def _budget_stopped(state: PipelineState) -> bool:
+    if state.get("budget_exceeded"):
+        return True
+    err = state.get("error") or ""
+    return "budget exceeded" in err.lower()
+
+
 def should_investigate(state: PipelineState) -> str:
     """After Sentinel: proceed to Scout if signal is worth investigating."""
+    if _budget_stopped(state):
+        return "end"
     sentinel = state.get("sentinel_output")
     if sentinel and sentinel.should_investigate:
         return "scout"
@@ -67,6 +77,8 @@ def should_investigate(state: PipelineState) -> str:
 
 def should_retry_or_proceed(state: PipelineState) -> str:
     """After Arbiter: retry research if validation failed, else proceed to Scribe."""
+    if _budget_stopped(state):
+        return "end"
     validation = state.get("validation_result")
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", 3)
@@ -120,6 +132,7 @@ def build_graph() -> StateGraph:
         {
             "scout": "scout",    # Retry loop
             "scribe": "scribe",  # Proceed to report
+            "end": END,
         },
     )
 
@@ -147,6 +160,7 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
 
     graph = build_graph()
 
+    budget = TokenBudget()
     initial_state: PipelineState = {
         "signal": signal,
         "workflow_id": workflow_id,
@@ -156,8 +170,10 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
         "current_agent": "sentinel",
         "error": None,
         "activity_log": [],
+        "token_budget": budget.to_dict(),
         "total_tokens_used": 0,
         "total_cost_usd": 0.0,
+        "budget_exceeded": False,
     }
 
     result = await graph.ainvoke(initial_state)

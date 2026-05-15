@@ -17,6 +17,7 @@ from backend.models.schemas import (
     AgentStatus,
 )
 from backend.services.llm import generate_structured
+from backend.services.budget import BudgetExceededError, check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.agents.state import PipelineState
@@ -53,6 +54,13 @@ async def sentinel_node(state: PipelineState) -> dict:
     wf_logger = logger.with_context(workflow_id=workflow_id)
     wf_logger.info("sentinel_started", title=signal.title, source=signal.source)
 
+    stopped = check_budget_or_stop(state, "sentinel", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
+
+    budget = get_budget(state)
+
     # Publish real-time event for the dashboard
     await publish_event("agent_activity", {
         "agent": "sentinel",
@@ -81,12 +89,14 @@ async def sentinel_node(state: PipelineState) -> dict:
     )
 
     try:
-        result: SentinelOutput = await generate_structured(
+        result, _usage = await generate_structured(
             prompt=prompt,
             response_model=SentinelOutput,
             system=SENTINEL_SYSTEM_PROMPT,
             temperature=0.3,  # Low temp for consistent classification
             model="llama-3.3-70b-versatile",
+            budget=budget,
+            agent="sentinel",
         )
 
         wf_logger.info(
@@ -110,11 +120,29 @@ async def sentinel_node(state: PipelineState) -> dict:
             "sentinel_output": result,
             "current_agent": "sentinel",
             "should_continue": result.should_investigate,
+            **budget.state_updates(),
             "activity_log": [ActivityEvent(
                 agent="sentinel",
                 status=AgentStatus.DONE,
                 message=f"Signal scored: {result.relevance_score:.2f}",
                 detail=result.reasoning[:300],
+                workflow_id=workflow_id,
+            )],
+        }
+
+    except BudgetExceededError as e:
+        wf_logger.warning("sentinel_budget_exceeded", error=str(e))
+        return {
+            **budget.state_updates(),
+            "error": str(e),
+            "budget_exceeded": True,
+            "should_continue": False,
+            "current_agent": "sentinel",
+            "activity_log": [ActivityEvent(
+                agent="sentinel",
+                status=AgentStatus.ERROR,
+                message="Budget exceeded",
+                detail=str(e),
                 workflow_id=workflow_id,
             )],
         }

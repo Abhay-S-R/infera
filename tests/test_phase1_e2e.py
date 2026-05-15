@@ -55,7 +55,7 @@ async def timed(coro):
 async def test_groq_plain_text():
     from backend.services.llm import generate
 
-    text, elapsed = await timed(
+    (text, _usage), elapsed = await timed(
         generate("Say hello in one sentence.", system="You are helpful.", model="llama-3.3-70b-versatile")
     )
     ok = len(text) > 0 and elapsed < 10
@@ -68,7 +68,7 @@ async def test_groq_plain_text():
 async def test_gemini_plain_text():
     from backend.services.llm import generate
 
-    text, elapsed = await timed(
+    (text, _usage), elapsed = await timed(
         generate("Say hello in one sentence.", system="You are helpful.", model="gemini-3.1-flash-lite")
     )
     ok = len(text) > 0 and elapsed < 15
@@ -82,7 +82,7 @@ async def test_groq_structured():
     from backend.services.llm import generate_structured
     from backend.models.schemas import SentinelOutput
 
-    result, elapsed = await timed(
+    (result, _usage), elapsed = await timed(
         generate_structured(
             prompt="Classify: NVIDIA launches H200 GPU with 2x performance.",
             response_model=SentinelOutput,
@@ -110,7 +110,7 @@ async def test_gemini_structured():
     from backend.services.llm import generate_structured
     from backend.models.schemas import AnalysisOutput
 
-    result, elapsed = await timed(
+    (result, _usage), elapsed = await timed(
         generate_structured(
             prompt="Analyze: NVIDIA launched H200 with 2x perf. Key finding: Competitor AMD has no response yet.",
             response_model=AnalysisOutput,

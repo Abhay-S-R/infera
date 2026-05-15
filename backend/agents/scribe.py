@@ -4,6 +4,8 @@ Dev 4 owns this file.
 """
 from backend.services.logger import get_logger
 from backend.services.llm import generate_structured
+from backend.services.budget import check_budget_or_stop, get_budget
+from backend.services.context import summarize_for_next_agent
 from backend.agents.state import PipelineState
 from backend.models.schemas import ReportOutput, ActivityEvent, AgentStatus
 from datetime import datetime, timezone
@@ -26,12 +28,20 @@ async def scribe_node(state: PipelineState) -> dict:
     Report agent — generates the final deliverable.
     """
     signal = state.get("signal")
-    research = state.get("research_output")
-    analysis = state.get("analysis_output")
     workflow_id = state.get("workflow_id", "unknown")
 
     log = logger.with_context(workflow_id=workflow_id)
     log.info("scribe_started", signal_title=signal.title if signal else "Unknown")
+
+    stopped = check_budget_or_stop(state, "scribe", workflow_id)
+    if stopped:
+        stopped["budget_exceeded"] = True
+        return stopped
+
+    budget = get_budget(state)
+    ctx_state = await summarize_for_next_agent(state, "scribe", budget=budget)
+    analysis = ctx_state.get("analysis_output") or state.get("analysis_output")
+    research = ctx_state.get("research_output") or state.get("research_output")
 
     # Guard against missing data
     if not analysis:
@@ -76,13 +86,15 @@ Please generate the final structured report.
 
     try:
         # Call the LLM
-        report: ReportOutput = await generate_structured(
+        report, _usage = await generate_structured(
             prompt=prompt,
             response_model=ReportOutput,
             system=SYSTEM_PROMPT,
-            temperature=0.4, # Slightly higher temp for better writing flow
+            temperature=0.4,
             model="llama-3.3-70b-versatile",
             max_output_tokens=8192,
+            budget=budget,
+            agent="scribe",
         )
         
         # Ensure we attach the sources correctly
@@ -94,6 +106,7 @@ Please generate the final structured report.
         return {
             "report_output": report,
             "current_agent": "scribe",
+            **budget.state_updates(),
             "activity_log": [ActivityEvent(
                 agent="scribe",
                 status=AgentStatus.DONE,
