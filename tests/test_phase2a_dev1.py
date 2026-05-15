@@ -13,14 +13,14 @@ import traceback
 import uuid
 from unittest.mock import AsyncMock, patch
 
-# Set DB URLs before backend imports (docker may expose 5432 or 5433)
-os.environ.setdefault(
+# Set DB URLs before backend imports (docker-compose maps host 5433 -> container 5432)
+os.environ["DATABASE_URL"] = os.environ.get(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db",
+    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
 )
-os.environ.setdefault(
+os.environ["DATABASE_URL_SYNC"] = os.environ.get(
     "DATABASE_URL_SYNC",
-    "postgresql://ascent:ascent_pass@localhost:5432/ascent_db",
+    "postgresql://ascent:ascent_pass@localhost:5433/ascent_db",
 )
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
