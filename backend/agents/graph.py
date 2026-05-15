@@ -10,6 +10,7 @@ Dev 2 owns this file. Agent implementations are in their own files.
 """
 import uuid
 from langgraph.graph import StateGraph, END
+from langgraph.constants import Send
 from backend.agents.state import PipelineState
 from backend.models.schemas import (
     SignalInput,
@@ -26,6 +27,7 @@ from backend.agents.scribe import scribe_node
 from backend.agents.sentinel import sentinel_node
 from backend.agents.scout import scout_node
 from backend.agents.arbiter import arbiter_node
+from backend.agents.verifier import verifier_node
 from backend.services.budget import TokenBudget
 
 
@@ -38,37 +40,67 @@ def _budget_stopped(state: PipelineState) -> bool:
     return "budget exceeded" in err.lower()
 
 
-def should_investigate(state: PipelineState) -> str:
-    """After Sentinel: proceed to Scout if signal is worth investigating."""
+def should_verify(state: PipelineState) -> str:
+    """After Sentinel: proceed to Verifier if signal is worth investigating."""
     if _budget_stopped(state):
         return "end"
     sentinel = state.get("sentinel_output")
     if sentinel and sentinel.should_investigate:
-        return "scout"
+        return "verifier"
     return "end"
 
 
-def should_retry_or_proceed(state: PipelineState) -> str:
+def should_continue_to_scouts(state: PipelineState):
+    """After Verifier: If verified, fan out to parallel scouts."""
+    if _budget_stopped(state) or not state.get("should_continue", True):
+        return ["__end__"]
+        
+    sentinel = state.get("sentinel_output")
+    if not sentinel:
+        return ["__end__"]
+        
+    angles = sentinel.investigation_angles or ["General Investigation"]
+    if not angles:
+        angles = ["General Investigation"]
+        
+    # Map-Reduce: Spawn a scout node for each angle
+    sends = []
+    for angle in angles:
+        scout_state = dict(state)
+        scout_state["current_angle"] = angle
+        sends.append(Send("scout", scout_state))
+        
+    return sends
+
+
+def should_retry_or_proceed(state: PipelineState):
     """After Arbiter: retry research if validation failed, else proceed to Scribe."""
     if _budget_stopped(state):
-        return "end"
+        return "__end__"
     validation = state.get("validation_result")
     retry_count = state.get("retry_count", 0)
     max_retries = state.get("max_retries", 3)
 
     if validation and not validation.is_approved and retry_count < max_retries:
-        return "scout"  # Retry with new queries
-    return "scribe"     # Proceed to report generation
+        # Spawn a single targeted retry scout
+        scout_state = dict(state)
+        scout_state["current_angle"] = "Targeted Retry"
+        return [Send("scout", scout_state)]
+        
+    return "scribe"
 
 
 def should_analyze_or_skip(state: PipelineState) -> str:
-    """After Scout: proceed to Strategist if research has data, else skip to Scribe."""
+    """After Scout: proceed to Strategist if any research has data, else skip to Scribe."""
     if _budget_stopped(state):
-        return "end"
-    research = state.get("research_output")
-    if research and research.sources_consulted > 0 and research.key_findings:
+        return "__end__"
+    research_list = state.get("research_output", [])
+    
+    # Check if ANY scout found data
+    has_data = any(r.sources_consulted > 0 and r.key_findings for r in research_list)
+    if has_data:
         return "strategist"
-    # No sources found — skip analysis, let Scribe generate an "insufficient data" report
+    # No sources found — skip analysis
     return "scribe"
 
 
@@ -77,16 +109,12 @@ def should_analyze_or_skip(state: PipelineState) -> str:
 def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None):
     """
     Build and compile the ASCENT agent pipeline graph.
-
-    Returns a compiled LangGraph that can be invoked with:
-        result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": workflow_id}})
-
-    interrupt_before: optional node names to pause before (used for crash-recovery tests).
     """
     builder = StateGraph(PipelineState)
 
     # Add nodes
     builder.add_node("sentinel", sentinel_node)
+    builder.add_node("verifier", verifier_node)
     builder.add_node("scout", scout_node)
     builder.add_node("strategist", strategist_node)
     builder.add_node("arbiter", arbiter_node)
@@ -95,39 +123,42 @@ def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None)
     # Set entry point
     builder.set_entry_point("sentinel")
 
-    # Sentinel → conditional: investigate or skip
+    # Sentinel → Verifier or END
     builder.add_conditional_edges(
         "sentinel",
-        should_investigate,
+        should_verify,
         {
-            "scout": "scout",
+            "verifier": "verifier",
             "end": END,
         },
     )
 
-    # Scout → conditional: analyze if we have data, else skip to report
+    # Verifier → Fan-out to Scouts or END
+    builder.add_conditional_edges(
+        "verifier",
+        should_continue_to_scouts,
+        ["scout", "__end__"]
+    )
+
+    # Scout → Strategist or Scribe
     builder.add_conditional_edges(
         "scout",
         should_analyze_or_skip,
         {
-            "strategist": "strategist",  # Has research data
-            "scribe": "scribe",          # No sources → "insufficient data" report
-            "end": END,
+            "strategist": "strategist",
+            "scribe": "scribe",
+            "__end__": END,
         },
     )
 
     # Strategist → Arbiter (always)
     builder.add_edge("strategist", "arbiter")
 
-    # Arbiter → conditional: retry or proceed
+    # Arbiter → Retry (Scout) or Scribe
     builder.add_conditional_edges(
         "arbiter",
         should_retry_or_proceed,
-        {
-            "scout": "scout",    # Retry loop
-            "scribe": "scribe",  # Proceed to report
-            "end": END,
-        },
+        ["scout", "scribe", "__end__"]
     )
 
     # Scribe → END

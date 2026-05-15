@@ -47,9 +47,9 @@ def estimate_state_tokens(state: PipelineState) -> int:
         total_chars += len(sentinel.summary) + len(sentinel.reasoning)
         total_chars += sum(len(e) for e in sentinel.entities)
 
-    research = state.get("research_output")
-    if research:
-        total_chars += _research_char_count(research)
+    research_list = state.get("research_output")
+    if research_list:
+        total_chars += sum(_research_char_count(r) for r in research_list)
 
     analysis = state.get("analysis_output")
     if analysis:
@@ -105,19 +105,22 @@ async def summarize_for_next_agent(
     wf_id = state.get("workflow_id", "unknown")
     log = logger.with_context(workflow_id=wf_id, target_agent=target_agent, tier=tier)
 
-    research: Optional[ResearchOutput] = state.get("research_output")
+    research_list: Optional[list[ResearchOutput]] = state.get("research_output")
     analysis: Optional[AnalysisOutput] = state.get("analysis_output")
     sentinel: Optional[SentinelOutput] = state.get("sentinel_output")
 
-    if tier == 2 and research:
+    if tier == 2 and research_list:
         log.info("context_tier2_research_compression")
-        compressed["research_output"] = ResearchOutput(
-            queries_used=research.queries_used[:5],
-            results=research.results[:5],
-            key_findings=research.key_findings,
-            sources_consulted=research.sources_consulted,
-            raw_content_summary=research.raw_content_summary[:4000],
-        )
+        compressed_list = []
+        for research in research_list:
+            compressed_list.append(ResearchOutput(
+                queries_used=research.queries_used[:5],
+                results=research.results[:5],
+                key_findings=research.key_findings,
+                sources_consulted=research.sources_consulted,
+                raw_content_summary=research.raw_content_summary[:4000],
+            ))
+        compressed["research_output"] = compressed_list
         return compressed  # type: ignore[return-value]
 
     # Tier 3: aggressive one-paragraph summary
@@ -125,19 +128,19 @@ async def summarize_for_next_agent(
     summary_text = await _build_tier3_summary(
         target_agent=target_agent,
         sentinel=sentinel,
-        research=research,
+        research_list=research_list,
         analysis=analysis,
         budget=budget,
     )
 
-    if research and target_agent in ("strategist", "arbiter"):
-        compressed["research_output"] = ResearchOutput(
-            queries_used=research.queries_used[:3],
+    if research_list and target_agent in ("strategist", "arbiter"):
+        compressed["research_output"] = [ResearchOutput(
+            queries_used=[],
             results=[],
             key_findings=[summary_text],
-            sources_consulted=research.sources_consulted,
+            sources_consulted=sum(r.sources_consulted for r in research_list),
             raw_content_summary=summary_text,
-        )
+        )]
 
     if analysis and target_agent == "scribe":
         compressed["analysis_output"] = AnalysisOutput(
@@ -156,7 +159,7 @@ async def _build_tier3_summary(
     *,
     target_agent: str,
     sentinel: Optional[SentinelOutput],
-    research: Optional[ResearchOutput],
+    research_list: Optional[list[ResearchOutput]],
     analysis: Optional[AnalysisOutput],
     budget: TokenBudget,
 ) -> str:
@@ -164,8 +167,12 @@ async def _build_tier3_summary(
     parts: list[str] = []
     if sentinel:
         parts.append(f"Signal: {sentinel.summary} (relevance {sentinel.relevance_score:.2f})")
-    if research and research.key_findings:
-        parts.append("Findings: " + "; ".join(research.key_findings[:8]))
+    if research_list:
+        all_findings = []
+        for r in research_list:
+            all_findings.extend(r.key_findings[:3])
+        if all_findings:
+            parts.append("Findings: " + "; ".join(all_findings[:8]))
     if analysis:
         parts.append(f"Analysis: {analysis.executive_summary}")
 
@@ -295,39 +302,41 @@ async def compress_analysis_output(
 async def prepare_for_strategist(
     state: PipelineState,
     budget: TokenBudget,
-) -> tuple[PipelineState, Optional[ResearchOutput], int]:
+) -> tuple[PipelineState, Optional[list[ResearchOutput]], int]:
     """
     Apply tiered budget compression, then Phase 2b 50k-token research compression.
     Returns (context state, research for prompts, estimated tokens after tier pass).
     """
     ctx = await summarize_for_next_agent(state, "strategist", budget=budget)
     estimated = estimate_state_tokens(ctx)
-    research = ctx.get("research_output") or state.get("research_output")
+    research_list = ctx.get("research_output") or state.get("research_output")
 
-    if estimated > STATE_TOKEN_THRESHOLD and research:
+    if estimated > STATE_TOKEN_THRESHOLD and research_list:
         logger.info(
             "context_50k_threshold_strategist",
             estimated_tokens=estimated,
             threshold=STATE_TOKEN_THRESHOLD,
         )
-        compressed = await compress_research_output(research, budget)
+        compressed_list = []
+        for r in research_list:
+            compressed_list.append(await compress_research_output(r, budget))
         ctx = copy.copy(dict(ctx))
-        ctx["research_output"] = compressed
+        ctx["research_output"] = compressed_list
         estimated = estimate_state_tokens(ctx)  # type: ignore[arg-type]
 
-    research_out = ctx.get("research_output") or research
+    research_out = ctx.get("research_output") or research_list
     return ctx, research_out, estimated
 
 
 async def prepare_for_scribe(
     state: PipelineState,
     budget: TokenBudget,
-) -> tuple[PipelineState, Optional[AnalysisOutput], Optional[ResearchOutput], int]:
+) -> tuple[PipelineState, Optional[AnalysisOutput], Optional[list[ResearchOutput]], int]:
     """Tiered compression + 50k analysis compression before Scribe."""
     ctx = await summarize_for_next_agent(state, "scribe", budget=budget)
     estimated = estimate_state_tokens(ctx)
     analysis = ctx.get("analysis_output") or state.get("analysis_output")
-    research = ctx.get("research_output") or state.get("research_output")
+    research_list = ctx.get("research_output") or state.get("research_output")
 
     if estimated > STATE_TOKEN_THRESHOLD and analysis:
         logger.info(
@@ -341,21 +350,27 @@ async def prepare_for_scribe(
         estimated = estimate_state_tokens(ctx)  # type: ignore[arg-type]
         analysis = compressed
 
-    return ctx, analysis, research, estimated
+    return ctx, analysis, research_list, estimated
 
 
-def research_prompt_block(research: ResearchOutput, *, tier: int) -> str:
+def research_prompt_block(research_list: list[ResearchOutput] | None, *, tier: int) -> str:
     """Format research for agent prompts based on compression tier."""
-    if tier >= 3:
-        return f"Research (compressed):\n{research.raw_content_summary}\n"
-    if tier == 2:
-        findings = "\n".join(f"- {f}" for f in research.key_findings)
-        return f"Key Findings:\n{findings}\n\nSummary:\n{research.raw_content_summary[:2000]}\n"
-    findings = "\n".join(f"- {f}" for f in research.key_findings)
-    return (
-        f"Key Findings:\n{findings}\n\n"
-        f"Raw Content Summary:\n{research.raw_content_summary}\n"
-    )
+    if not research_list:
+        return "No research available."
+        
+    blocks = []
+    for i, research in enumerate(research_list):
+        blocks.append(f"--- Research Angle {i+1} ---")
+        if tier >= 3:
+            blocks.append(f"Research (compressed):\n{research.raw_content_summary}\n")
+        elif tier == 2:
+            findings = "\n".join(f"- {f}" for f in research.key_findings)
+            blocks.append(f"Key Findings:\n{findings}\n\nSummary:\n{research.raw_content_summary[:2000]}\n")
+        else:
+            findings = "\n".join(f"- {f}" for f in research.key_findings)
+            blocks.append(f"Key Findings:\n{findings}\n\nRaw Content Summary:\n{research.raw_content_summary}\n")
+            
+    return "\n".join(blocks)
 
 
 async def get_competitor_history(competitor: str, limit: int = 3) -> list[Report]:

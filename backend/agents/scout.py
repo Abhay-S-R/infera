@@ -17,6 +17,7 @@ from backend.models.schemas import (
     SentinelOutput,
     ActivityEvent,
     AgentStatus,
+    CoverageEvaluation,
 )
 from backend.services.llm import generate, generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
@@ -29,19 +30,26 @@ from backend.agents.tools.url_scraper import scrape_url
 
 logger = get_logger("scout")
 
-QUERY_GENERATION_PROMPT = """You are a competitive intelligence research specialist.
+QUERY_GENERATION_PROMPT = """You are a strategic competitive intelligence researcher.
 
 Given a signal that has been flagged for investigation, generate {num_queries} diverse web search queries
-that will help gather comprehensive competitive intelligence about this signal.
+that will help gather comprehensive intelligence about this signal.
 
-The queries should cover:
-- The core event/announcement itself
-- Competitor reactions and market response
-- Historical context and trend implications
-- Technical or strategic details
+Instead of simple headline variations, generate strategic questions focusing on:
+- Product Pricing and Features
+- Executive Team and Leadership moves
+- Build vs Buy implications
+- Go-To-Market (GTM) strategy and market response
 
 Return ONLY a JSON array of query strings, nothing else.
 Example: ["query one", "query two", "query three"]"""
+
+COVERAGE_EVAL_PROMPT = """You are a Senior Research Editor.
+Review the synthesized research findings against the original signal.
+Determine if the research adequately covers the strategic angles (Pricing, Team, Build vs Buy, GTM).
+If the research is lacking in key areas or has unanswered questions, list the missing questions and assign a confidence score < 0.75.
+If the research is comprehensive, assign a confidence score >= 0.75.
+"""
 
 SYNTHESIS_SYSTEM_PROMPT = """You are the Scout agent — a competitive intelligence researcher.
 
@@ -65,6 +73,7 @@ async def scout_node(state: PipelineState) -> dict:
     signal = state["signal"]
     workflow_id = state.get("workflow_id", "unknown")
     retry_count = state.get("retry_count", 0)
+    current_angle = state.get("current_angle", "General Investigation")
 
     # Check if Arbiter sent us back with specific retry queries
     validation = state.get("validation_result")
@@ -92,93 +101,132 @@ async def scout_node(state: PipelineState) -> dict:
             "workflow_id": workflow_id,
         })
 
-    # ─── Step 1: Generate search queries ───
+    # ─── Setup Adaptive Loop ───
+    MAX_SCOUT_LOOPS = 2
+    loop_count = 0
+    
+    all_results: list[SearchResult] = []
+    scraped_content: list[str] = []
+    all_queries_used: list[str] = []
+    seen_urls = set()
+
     if retry_queries:
         queries = retry_queries
         wf_logger.info("scout_using_retry_queries", queries=queries)
     else:
-        queries = await _generate_queries(signal, sentinel_output, num_queries=4, budget=budget)
+        queries = await _generate_queries(signal, sentinel_output, current_angle, num_queries=4, budget=budget)
         wf_logger.info("scout_queries_generated", queries=queries)
 
-    await publish_event("agent_activity", {
-        "agent": "scout",
-        "status": "running",
-        "message": f"Executing {len(queries)} search queries",
-        "detail": "; ".join(queries[:3]),
-        "workflow_id": workflow_id,
-    })
-
-    # ─── Step 2: Execute searches in parallel ───
-    all_results: list[SearchResult] = []
-    search_tasks = [search_web(q, max_results=4) for q in queries]
-    search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
-
-    for i, result in enumerate(search_results):
-        if isinstance(result, Exception):
-            wf_logger.warning("scout_search_failed", query=queries[i], error=str(result))
-            continue
-        all_results.extend(result)
-
-    # Deduplicate by URL
-    seen_urls = set()
-    unique_results = []
-    for r in all_results:
-        if r.url not in seen_urls:
-            seen_urls.add(r.url)
-            unique_results.append(r)
-    all_results = unique_results
-
-    wf_logger.info("scout_search_complete", total_results=len(all_results))
-
-    await publish_event("agent_activity", {
-        "agent": "scout",
-        "status": "running",
-        "message": f"Found {len(all_results)} unique sources",
-        "detail": f"Scraping top results for full content...",
-        "workflow_id": workflow_id,
-    })
-
-    # ─── Step 3: Scrape top 3 URLs for fuller content ───
-    top_results = sorted(all_results, key=lambda r: r.relevance, reverse=True)[:3]
-    scraped_content = []
-
-    for result in top_results:
-        try:
-            content = await scrape_url(result.url, max_chars=3000)
-            if content and len(content) > 100:
-                scraped_content.append(f"### {result.title}\nSource: {result.url}\n\n{content[:2000]}")
-        except Exception as e:
-            wf_logger.warning("scout_scrape_failed", url=result.url, error=str(e))
-
-    # ─── Step 4: Synthesize findings with LLM ───
-    synthesis_prompt = _build_synthesis_prompt(signal, sentinel_output, all_results, scraped_content)
-
     try:
-        research_output, _usage = await generate_structured(
-            prompt=synthesis_prompt,
-            response_model=ResearchOutput,
-            system=SYNTHESIS_SYSTEM_PROMPT,
-            temperature=0.4,
-            max_output_tokens=8192,
-            budget=budget,
-            agent="scout",
-        )
+        while loop_count < MAX_SCOUT_LOOPS:
+            loop_count += 1
+            all_queries_used.extend(queries)
 
-        # Override with actual data
-        research_output.queries_used = queries
-        research_output.results = all_results[:15]  # Cap to avoid context blowup
-        research_output.sources_consulted = len(all_results)
+            await publish_event("agent_activity", {
+                "agent": "scout",
+                "status": "running",
+                "message": f"Loop {loop_count}: Executing {len(queries)} search queries",
+                "detail": "; ".join(queries[:3]),
+                "workflow_id": workflow_id,
+            })
 
+            # ─── Step 2: Execute searches in parallel ───
+            search_tasks = [search_web(q, max_results=4) for q in queries]
+            search_results = await asyncio.gather(*search_tasks, return_exceptions=True)
+
+            new_results = []
+            for i, result in enumerate(search_results):
+                if isinstance(result, Exception):
+                    wf_logger.warning("scout_search_failed", query=queries[i], error=str(result))
+                    continue
+                new_results.extend(result)
+
+            # Deduplicate by URL
+            for r in new_results:
+                if r.url not in seen_urls:
+                    seen_urls.add(r.url)
+                    all_results.append(r)
+
+            wf_logger.info("scout_search_complete", total_results=len(all_results), new_results=len(new_results))
+
+            await publish_event("agent_activity", {
+                "agent": "scout",
+                "status": "running",
+                "message": f"Found {len(all_results)} total unique sources",
+                "detail": f"Scraping top results for full content...",
+                "workflow_id": workflow_id,
+            })
+
+            # ─── Step 3: Scrape top 3 URLs for fuller content ───
+            top_results = sorted(all_results, key=lambda r: r.relevance, reverse=True)[:3]
+            
+            # Only scrape if we haven't already
+            scraped_content = []
+            for result in top_results:
+                try:
+                    content = await scrape_url(result.url, max_chars=3000)
+                    if content and len(content) > 100:
+                        scraped_content.append(f"### {result.title}\\nSource: {result.url}\\n\\n{content[:2000]}")
+                except Exception as e:
+                    wf_logger.warning("scout_scrape_failed", url=result.url, error=str(e))
+
+            # ─── Step 4: Synthesize findings with LLM ───
+            synthesis_prompt = _build_synthesis_prompt(signal, sentinel_output, all_results, scraped_content)
+
+            research_output, _usage = await generate_structured(
+                prompt=synthesis_prompt,
+                response_model=ResearchOutput,
+                system=SYNTHESIS_SYSTEM_PROMPT,
+                temperature=0.4,
+                max_output_tokens=8192,
+                budget=budget,
+                agent="scout",
+            )
+
+            research_output.queries_used = all_queries_used
+            research_output.results = all_results[:15]
+            research_output.sources_consulted = len(all_results)
+            
+            if loop_count >= MAX_SCOUT_LOOPS:
+                break
+                
+            # ─── Step 5: Evaluate Coverage ───
+            eval_prompt = f"Original Signal: {signal.title}\\nType: {sentinel_output.event_type}\\n\\nCurrent Research Summary:\\n{research_output.raw_content_summary}\\n\\nKey Findings:\\n{'; '.join(research_output.key_findings)}\\n\\nEvaluate the coverage."
+            
+            try:
+                coverage_eval, _eval_usage = await generate_structured(
+                    prompt=eval_prompt,
+                    response_model=CoverageEvaluation,
+                    system=COVERAGE_EVAL_PROMPT,
+                    temperature=0.3,
+                    budget=budget,
+                    agent="scout"
+                )
+                
+                wf_logger.info("scout_coverage_eval", confidence=coverage_eval.confidence, missing_questions=coverage_eval.missing_questions)
+                
+                if coverage_eval.confidence >= 0.75 or not coverage_eval.missing_questions:
+                    break
+                    
+                # If confidence is low, we generate new queries based on missing questions
+                queries = coverage_eval.missing_questions[:3] # Take up to 3 missing questions
+                
+            except Exception as e:
+                wf_logger.warning("scout_coverage_eval_failed", error=str(e))
+                break # Break on eval error to be safe
+
+        # Outside the loop, return the final research_output
         wf_logger.info(
             "scout_completed",
             findings=len(research_output.key_findings),
             sources=research_output.sources_consulted,
+            loops=loop_count
         )
 
         await publish_event("agent_activity", {
             "agent": "scout",
             "status": "done",
-            "message": f"Research complete: {len(research_output.key_findings)} key findings from {research_output.sources_consulted} sources",
+            "message": f"Research complete after {loop_count} loops: {len(research_output.key_findings)} findings from {research_output.sources_consulted} sources",
             "workflow_id": workflow_id,
         })
 
@@ -229,6 +277,7 @@ async def scout_node(state: PipelineState) -> dict:
 async def _generate_queries(
     signal,
     sentinel_output: SentinelOutput,
+    current_angle: str,
     num_queries: int = 4,
     budget=None,
 ) -> list[str]:
@@ -237,12 +286,13 @@ async def _generate_queries(
         f"Signal: {signal.title}\n"
         f"Event Type: {sentinel_output.event_type}\n"
         f"Entities: {', '.join(sentinel_output.entities)}\n"
+        f"Investigation Angle: {current_angle}\n"
         f"Summary: {sentinel_output.summary}\n"
     )
     if signal.custom_question:
         prompt += f"User's Question: {signal.custom_question}\n"
 
-    prompt += f"\nGenerate {num_queries} diverse search queries for competitive intelligence research."
+    prompt += f"\nGenerate {num_queries} diverse search queries specifically focused on the '{current_angle}' angle."
 
     try:
         raw, _usage = await generate(

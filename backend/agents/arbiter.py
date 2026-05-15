@@ -57,7 +57,7 @@ async def arbiter_node(state: PipelineState) -> dict:
     decides approve/reject, and provides retry queries if needed.
     """
     analysis: AnalysisOutput = state.get("analysis_output")
-    research: ResearchOutput = state.get("research_output")
+    research_list: list[ResearchOutput] = state.get("research_output", [])
     signal = state.get("signal")
     workflow_id = state.get("workflow_id", "unknown")
     retry_count = state.get("retry_count", 0)
@@ -97,7 +97,7 @@ async def arbiter_node(state: PipelineState) -> dict:
         )
 
     # Build the validation prompt
-    prompt = _build_validation_prompt(signal, analysis, research)
+    prompt = _build_validation_prompt(signal, analysis, research_list)
 
     try:
         result, _usage = await generate_structured(
@@ -183,7 +183,7 @@ def _auto_approve(workflow_id: str, confidence: float, reason: str) -> dict:
     }
 
 
-def _build_validation_prompt(signal, analysis: AnalysisOutput, research: ResearchOutput) -> str:
+def _build_validation_prompt(signal, analysis: AnalysisOutput, research_list: list[ResearchOutput]) -> str:
     """Build the validation prompt from analysis and research."""
     prompt = f"## Signal\n**Title:** {signal.title if signal else 'Unknown'}\n\n"
 
@@ -204,19 +204,22 @@ def _build_validation_prompt(signal, analysis: AnalysisOutput, research: Researc
 
     prompt += f"\n**Stated Confidence:** {analysis.overall_confidence}\n"
 
-    prompt += "\n## Research Evidence (Scout's Findings)\n"
-    if research and research.key_findings:
-        prompt += "**Key Findings:**\n"
-        for f in research.key_findings:
-            prompt += f"- {f}\n"
+    prompt += "\n## Research Evidence (Scout's Findings from Multiple Angles)\n"
+    if research_list:
+        all_queries = []
+        for idx, research in enumerate(research_list):
+            prompt += f"\n### Research Angle {idx + 1}\n"
+            if research.key_findings:
+                prompt += "**Key Findings:**\n"
+                for f in research.key_findings:
+                    prompt += f"- {f}\n"
+            if research.raw_content_summary:
+                prompt += f"\n**Raw Summary:** {research.raw_content_summary[:1000]}\n"
+            all_queries.extend(research.queries_used)
+        if all_queries:
+            prompt += f"\n**Original Search Queries:** {all_queries}\n"
     else:
         prompt += "No research findings available.\n"
-
-    if research and research.raw_content_summary:
-        prompt += f"\n**Raw Summary:** {research.raw_content_summary[:1500]}\n"
-
-    if research and research.queries_used:
-        prompt += f"\n**Original Search Queries:** {research.queries_used}\n"
 
     prompt += (
         "\n## Your Task\n"

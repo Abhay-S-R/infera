@@ -14,14 +14,16 @@ from backend.services.tracing import get_tracer
 logger = get_logger("scribe")
 
 SYSTEM_PROMPT = """You are an Executive Report Writer for a top-tier competitive intelligence firm.
-Your job is to take structured competitive analysis and research, and weave it into a highly readable, beautifully formatted Markdown report.
+Your job is to take structured competitive analysis and research, and weave it into 4 targeted, highly readable, beautifully formatted Markdown documents.
 
 Rules:
-1. The report must be highly professional, structured with clear headings, bullet points, and bold text for emphasis.
-2. Ensure you include an Executive Summary, Detailed Insights, Market Impact, and Strategic Recommendations sections.
-3. Incorporate source citations smoothly where appropriate.
-4. Your output MUST be valid markdown inside the `full_report_markdown` field.
-5. Create a catchy, professional title.
+1. You must generate 4 distinct documents:
+   - Executive Brief (for CEO/Leadership): Focus on high-level impact and CEO questions.
+   - Technical Brief (for Engineering/Product): Focus on features, tech stack, and build vs buy.
+   - Sales Brief (for GTM teams): Focus on pricing, positioning, and objection handling.
+   - Risk Brief (for Legal/Risk): Focus on compliance, vulnerabilities, and market risks.
+2. Use markdown formatting with clear headings, bullet points, and bold text for emphasis.
+3. Create a catchy, professional title for the overall report.
 """
 
 async def scribe_node(state: PipelineState) -> dict:
@@ -59,10 +61,11 @@ async def scribe_node(state: PipelineState) -> dict:
             )]
         }
 
-    # Extract sources from research
+    # Extract sources from research (now a list from parallel scouts)
     sources = []
-    if research and research.results:
-        sources = [res.url for res in research.results if res.url]
+    if research:
+        for r in research:
+            sources.extend([res.url for res in r.results if res.url])
 
     # Construct the user prompt
     prompt = f"""
@@ -76,12 +79,15 @@ Market Impact: {analysis.market_impact}
 Competitive Positioning: {analysis.competitive_positioning}
 
 INSIGHTS:
-{chr(10).join(f"- {i.insight} (Impact: {i.impact})" for i in analysis.insights)}
+{chr(10).join(f"- {i.insight} ({i.type}, Impact: {i.impact})" for i in analysis.insights)}
 
 RECOMMENDATIONS:
 {chr(10).join(f"- {r}" for r in analysis.strategic_recommendations)}
 
-Please generate the final structured report.
+CEO QUESTIONS:
+{chr(10).join(f"- {q}" for q in analysis.ceo_questions)}
+
+Please generate the 4 final targeted briefs based on this intelligence.
 """
 
     log.info("scribe_generating_report")
@@ -93,7 +99,7 @@ Please generate the final structured report.
             response_model=ReportOutput,
             system=SYSTEM_PROMPT,
             temperature=0.4,
-            model="llama-3.3-70b-versatile",
+            model="gemini-3.1-flash-lite",
             max_output_tokens=8192,
             budget=budget,
             agent="scribe",
