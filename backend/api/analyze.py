@@ -1,12 +1,13 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.api.deps import require_database
 from backend.models.database import AsyncSessionLocal
 from backend.models.schemas import SignalInput
 from backend.models.tables import WebhookEvent
 from backend.services.background import dispatch_pipeline
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", dependencies=[Depends(require_database)])
 
 
 async def get_session() -> AsyncSession:

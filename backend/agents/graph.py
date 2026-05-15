@@ -61,14 +61,27 @@ def should_retry_or_proceed(state: PipelineState) -> str:
     return "scribe"     # Proceed to report generation
 
 
+def should_analyze_or_skip(state: PipelineState) -> str:
+    """After Scout: proceed to Strategist if research has data, else skip to Scribe."""
+    if _budget_stopped(state):
+        return "end"
+    research = state.get("research_output")
+    if research and research.sources_consulted > 0 and research.key_findings:
+        return "strategist"
+    # No sources found — skip analysis, let Scribe generate an "insufficient data" report
+    return "scribe"
+
+
 # ─── Graph Builder ───
 
-def build_graph(checkpointer=None):
+def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None):
     """
     Build and compile the ASCENT agent pipeline graph.
 
     Returns a compiled LangGraph that can be invoked with:
         result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": workflow_id}})
+
+    interrupt_before: optional node names to pause before (used for crash-recovery tests).
     """
     builder = StateGraph(PipelineState)
 
@@ -92,8 +105,16 @@ def build_graph(checkpointer=None):
         },
     )
 
-    # Scout → Strategist (always)
-    builder.add_edge("scout", "strategist")
+    # Scout → conditional: analyze if we have data, else skip to report
+    builder.add_conditional_edges(
+        "scout",
+        should_analyze_or_skip,
+        {
+            "strategist": "strategist",  # Has research data
+            "scribe": "scribe",          # No sources → "insufficient data" report
+            "end": END,
+        },
+    )
 
     # Strategist → Arbiter (always)
     builder.add_edge("strategist", "arbiter")
@@ -112,12 +133,27 @@ def build_graph(checkpointer=None):
     # Scribe → END
     builder.add_edge("scribe", END)
 
-    return builder.compile(checkpointer=checkpointer)
+    compile_kwargs: dict = {"checkpointer": checkpointer}
+    if interrupt_before:
+        compile_kwargs["interrupt_before"] = interrupt_before
+    return builder.compile(**compile_kwargs)
 
 
 def pipeline_config(workflow_id: str) -> dict:
     """LangGraph config for checkpointing — thread_id maps to workflow id."""
     return {"configurable": {"thread_id": workflow_id}}
+
+
+async def get_checkpoint_next_agent(workflow_id: str, checkpointer) -> str | None:
+    """Return the next agent node from the LangGraph checkpoint (for resume UX/logging)."""
+    graph = build_graph(checkpointer=checkpointer)
+    snapshot = await graph.aget_state(pipeline_config(workflow_id))
+    if snapshot and snapshot.next:
+        node = snapshot.next[0]
+        if isinstance(node, str):
+            return node
+        return str(node)
+    return None
 
 
 # ─── Convenience runner ───
