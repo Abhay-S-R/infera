@@ -55,6 +55,13 @@ class Settings(BaseSettings):
     SCHEDULER_ENABLED: bool = True
     SCHEDULER_INTERVAL_MINUTES: int = 5
 
+    # Phase 4 — verification & demo
+    VERIFIER_STRICT: bool = True
+    VERIFIER_DEMO_PASS_TITLES: str = (
+        "golden path,nimbus ai,scheduled scan: nimbus"
+    )
+    REPORTS_OUTPUT_DIR: str = "reports_output"
+
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE) if _ENV_FILE.is_file() else ".env",
         env_file_encoding="utf-8",

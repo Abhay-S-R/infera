@@ -27,6 +27,16 @@ class InsightType(str, Enum):
     SPECULATIVE = "speculative"
 
 
+class VerificationSourceType(str, Enum):
+    """Primary-source check types run by the Verifier (Phase 4)."""
+    SIGNAL_URL = "signal_url"
+    OFFICIAL_BLOG = "official_blog"
+    PRODUCT_PAGE = "product_page"
+    LINKEDIN = "linkedin"
+    SEC_FILING = "sec_filing"
+    NEWS_CORROBORATION = "news_corroboration"
+
+
 class AgentStatus(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
@@ -59,6 +69,75 @@ class SentinelOutput(BaseModel):
     investigation_angles: list[str] = Field(default_factory=list, description="3 distinct angles to research (e.g. Financial, Technical, Market)")
     summary: str = Field(description="One-paragraph summary of the signal")
     reasoning: str = Field(description="Why this score was assigned")
+    resolved_competitor: Optional[str] = Field(
+        default=None,
+        description="Canonical competitor name for profile lookup (Dev 4 may set)",
+    )
+
+
+# ─── Phase 4: Primary verification (Dev 2) ───
+
+
+class VerificationCheck(BaseModel):
+    """Result of a single primary-source verification step."""
+    source_type: VerificationSourceType
+    passed: bool
+    url: Optional[str] = None
+    evidence: str = Field(default="", description="What was found or why check failed")
+
+
+class VerificationOutput(BaseModel):
+    """Verifier agent output — skeptical gate before Scout fan-out."""
+    is_verified: bool
+    reasoning: str
+    checks: list[VerificationCheck] = Field(default_factory=list)
+    degraded: bool = Field(
+        default=False,
+        description="True if tools failed; pipeline should not auto-pass unverified signals",
+    )
+
+
+# ─── Phase 4: Institutional competitor memory (Dev 2) ───
+
+
+class LaunchHistoryEntry(BaseModel):
+    product: str
+    announced: str = ""
+    shipped: str = ""
+    notes: str = ""
+
+
+class CompetitorProfile(BaseModel):
+    """Structured institutional memory — upserted after each successful run."""
+    competitor_name: str
+    shipping_record: str = ""
+    launch_history: list[LaunchHistoryEntry] = Field(default_factory=list)
+    hiring_signals: list[str] = Field(default_factory=list)
+    ceo_public_statements: list[str] = Field(default_factory=list)
+    last_assessment: str = ""
+    updated_at: Optional[datetime] = None
+
+
+# ─── Phase 4: Scout research agenda (Dev 4 implements generation) ───
+
+
+class ResearchQuestion(BaseModel):
+    question: str
+    why_it_matters: str
+    priority: int = Field(ge=1, le=5, default=3)
+
+
+class ResearchAgenda(BaseModel):
+    questions: list[ResearchQuestion] = Field(default_factory=list)
+
+
+# ─── Phase 4: CEO meeting prep (Dev 4 implements generation) ───
+
+
+class CeoQaPair(BaseModel):
+    question: str
+    answer: str
+    confidence: InsightType = InsightType.INFERRED
 
 
 # ─── Scout Output ───
@@ -78,6 +157,10 @@ class ResearchOutput(BaseModel):
     key_findings: list[str] = Field(description="Top 5-10 key findings from research")
     sources_consulted: int = Field(default=0)
     raw_content_summary: str = Field(description="Synthesized summary of all gathered content")
+    agenda: Optional[ResearchAgenda] = Field(
+        default=None,
+        description="Analyst research agenda (Dev 4: populate before searches)",
+    )
 
 
 class CoverageEvaluation(BaseModel):
@@ -104,7 +187,14 @@ class AnalysisOutput(BaseModel):
     competitive_positioning: str = Field(description="How this affects competitive landscape")
     insights: list[CompetitiveInsight] = Field(default_factory=list)
     strategic_recommendations: list[str] = Field(description="Actionable recommendations")
-    ceo_questions: list[str] = Field(default_factory=list, description="Critical strategic questions for the CEO to consider")
+    ceo_questions: list[str] = Field(
+        default_factory=list,
+        description="Deprecated — use ceo_qa_pairs; kept for backward compatibility",
+    )
+    ceo_qa_pairs: list[CeoQaPair] = Field(
+        default_factory=list,
+        description="Anticipated CEO questions with pre-written answers (Dev 4)",
+    )
     overall_confidence: float = Field(ge=0, le=1, description="Overall confidence in analysis")
 
 

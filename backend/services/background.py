@@ -14,6 +14,8 @@ from backend.services.checkpointer import get_checkpointer
 from backend.services.events import publish_event
 from backend.services.budget import usage_from_pipeline_result
 from backend.services.delivery import deliver_report
+from backend.services.pdf_generator import write_report_pdf
+from backend.services.profile_writer import update_competitor_profile_from_run
 from backend.services.logger import get_logger
 
 logger = get_logger("dispatcher")
@@ -46,9 +48,33 @@ async def _complete_workflow(
     budget_stopped = _budget_stopped(result)
 
     delivery_result: dict[str, object] | None = None
+    pdf_path: str | None = None
     competitor_name: str | None = None
     if isinstance(workflow.extra_data, dict):
         competitor_name = workflow.extra_data.get("competitor_name")
+
+    # Profile write-back (Phase 4) — even if report missing, update memory when analysis exists
+    analysis = result.get("analysis_output")
+    signal_data = workflow.extra_data if isinstance(workflow.extra_data, dict) else {}
+    try:
+        from backend.models.schemas import SignalInput, SentinelOutput
+
+        signal_obj = SignalInput(**signal_data) if signal_data.get("title") else None
+        sentinel_obj = result.get("sentinel_output")
+        if sentinel_obj and not competitor_name:
+            competitor_name = (
+                signal_obj.competitor_name if signal_obj else None
+            ) or (sentinel_obj.resolved_competitor if hasattr(sentinel_obj, "resolved_competitor") else None)
+            if not competitor_name and sentinel_obj.entities:
+                competitor_name = sentinel_obj.entities[0]
+        await update_competitor_profile_from_run(
+            signal=signal_obj,
+            sentinel=sentinel_obj if isinstance(sentinel_obj, SentinelOutput) else None,
+            analysis=analysis,
+            research_list=result.get("research_output"),
+        )
+    except Exception as exc:
+        logger.warning("profile_writeback_skipped", workflow_id=workflow_id, error=str(exc)[:200])
 
     if report_output:
         combined_markdown = (
@@ -73,7 +99,13 @@ async def _complete_workflow(
         )
         session.add(report)
 
-    workflow.status = "budget_exceeded" if budget_stopped else "completed"
+    err_text = (result.get("error") or "").lower()
+    if "unverified" in err_text and not report_output:
+        workflow.status = "rejected"
+    elif budget_stopped:
+        workflow.status = "budget_exceeded"
+    else:
+        workflow.status = "completed"
     workflow.current_agent = "done"
     tokens, cost = usage_from_pipeline_result(result)
     workflow.tokens_used = tokens
@@ -87,6 +119,11 @@ async def _complete_workflow(
     await session.commit()
 
     if report_output:
+        try:
+            pdf_path = write_report_pdf(report_output, workflow_id)
+        except Exception as exc:
+            logger.warning("pdf_exception", workflow_id=workflow_id, error=str(exc)[:200])
+
         try:
             delivery_result = await deliver_report(
                 report_output,
@@ -125,6 +162,8 @@ async def _complete_workflow(
     }
     if delivery_result:
         completion_payload["delivery"] = delivery_result
+    if pdf_path:
+        completion_payload["pdf_path"] = pdf_path
     await publish_event("workflow.completed", completion_payload)
 
 

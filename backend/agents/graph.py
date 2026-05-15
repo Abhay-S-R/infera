@@ -29,6 +29,7 @@ from backend.agents.scout import scout_node
 from backend.agents.arbiter import arbiter_node
 from backend.agents.verifier import verifier_node
 from backend.services.budget import TokenBudget
+from backend.services.context import load_competitor_profile_for_pipeline
 
 
 # ─── Routing Logic ───
@@ -54,7 +55,11 @@ def should_continue_to_scouts(state: PipelineState):
     """After Verifier: If verified, fan out to parallel scouts."""
     if _budget_stopped(state) or not state.get("should_continue", True):
         return ["__end__"]
-        
+
+    verification = state.get("verification_output")
+    if verification is not None and not verification.is_verified:
+        return ["__end__"]
+
     sentinel = state.get("sentinel_output")
     if not sentinel:
         return ["__end__"]
@@ -243,6 +248,12 @@ async def run_pipeline(
     final_initial_state = default_state.copy()
     if initial_state:
         final_initial_state.update(initial_state)
+
+    # Phase 4: preload institutional memory when competitor is known
+    if signal and not final_initial_state.get("competitor_profile"):
+        profile = await load_competitor_profile_for_pipeline(signal)
+        if profile:
+            final_initial_state["competitor_profile"] = profile
 
     result = await graph.ainvoke(final_initial_state, config=config)
     return result

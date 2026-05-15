@@ -42,6 +42,17 @@ class Competitor(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class CompetitorProfileRow(Base):
+    """Institutional memory per competitor (Phase 4)."""
+    __tablename__ = "competitor_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(256), nullable=False, unique=True, index=True)
+    profile = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Report(Base):
     __tablename__ = "reports"
 

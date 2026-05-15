@@ -11,15 +11,19 @@ from typing import Any, Optional
 from backend.agents.state import PipelineState
 from backend.models.schemas import (
     AnalysisOutput,
+    CompetitorProfile,
+    LaunchHistoryEntry,
     ResearchOutput,
     SentinelOutput,
+    SignalInput,
 )
 from backend.services.budget import TokenBudget, get_budget
 from backend.services.llm import generate
 from backend.services.logger import get_logger
-from backend.models.tables import Report
+from backend.models.tables import Report, CompetitorProfileRow
 from backend.models.database import AsyncSessionLocal
 from sqlalchemy import select
+from datetime import datetime, timezone
 
 logger = get_logger("context")
 
@@ -371,6 +375,105 @@ def research_prompt_block(research_list: list[ResearchOutput] | None, *, tier: i
             blocks.append(f"Key Findings:\n{findings}\n\nRaw Content Summary:\n{research.raw_content_summary}\n")
             
     return "\n".join(blocks)
+
+
+def resolve_competitor_name(
+    signal: SignalInput | None,
+    sentinel: SentinelOutput | None = None,
+) -> str | None:
+    """Pick the canonical competitor name for profile lookup."""
+    if signal and signal.competitor_name:
+        return signal.competitor_name.strip()
+    if sentinel and sentinel.resolved_competitor:
+        return sentinel.resolved_competitor.strip()
+    if sentinel and sentinel.entities:
+        return sentinel.entities[0].strip()
+    return None
+
+
+async def get_competitor_profile(name: str) -> CompetitorProfile | None:
+    """Load structured institutional memory for a competitor."""
+    if not name or not name.strip():
+        return None
+    key = name.strip()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CompetitorProfileRow).where(CompetitorProfileRow.name.ilike(key))
+        )
+        row = result.scalar_one_or_none()
+    if not row or not row.profile:
+        return None
+    data = dict(row.profile)
+    data.setdefault("competitor_name", row.name)
+    try:
+        return CompetitorProfile.model_validate(data)
+    except Exception as e:
+        logger.warning("competitor_profile_parse_failed", name=key, error=str(e))
+        return CompetitorProfile(
+            competitor_name=row.name,
+            last_assessment=str(row.profile)[:2000],
+        )
+
+
+async def upsert_competitor_profile(profile: CompetitorProfile) -> None:
+    """Persist or merge competitor institutional memory."""
+    name = profile.competitor_name.strip()
+    if not name:
+        return
+    payload = profile.model_dump(mode="json")
+    payload["updated_at"] = datetime.now(timezone.utc).isoformat()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CompetitorProfileRow).where(CompetitorProfileRow.name.ilike(name))
+        )
+        row = result.scalar_one_or_none()
+        if row:
+            row.profile = payload
+            row.name = name
+        else:
+            session.add(CompetitorProfileRow(name=name, profile=payload))
+        await session.commit()
+    logger.info("competitor_profile_upserted", competitor=name)
+
+
+def competitor_profile_prompt_block(profile: CompetitorProfile | None) -> str:
+    """Format profile for agent prompts (Sentinel / Strategist)."""
+    if not profile:
+        return ""
+    lines = [
+        "COMPETITOR INSTITUTIONAL MEMORY:",
+        f"- Shipping record: {profile.shipping_record or 'Unknown'}",
+        f"- Last assessment: {profile.last_assessment or 'None'}",
+    ]
+    if profile.launch_history:
+        lines.append("- Launch history:")
+        for entry in profile.launch_history[:5]:
+            if isinstance(entry, LaunchHistoryEntry):
+                lines.append(
+                    f"  • {entry.product}: announced {entry.announced}, "
+                    f"shipped {entry.shipped or 'TBD'} — {entry.notes}"
+                )
+            elif isinstance(entry, dict):
+                lines.append(
+                    f"  • {entry.get('product', '?')}: announced {entry.get('announced', '?')}, "
+                    f"shipped {entry.get('shipped', 'TBD')} — {entry.get('notes', '')}"
+                )
+    if profile.hiring_signals:
+        lines.append("- Hiring signals: " + "; ".join(profile.hiring_signals[:5]))
+    if profile.ceo_public_statements:
+        lines.append("- CEO statements: " + "; ".join(profile.ceo_public_statements[:3]))
+    return "\n".join(lines)
+
+
+async def load_competitor_profile_for_pipeline(
+    signal: SignalInput,
+    sentinel: SentinelOutput | None = None,
+) -> CompetitorProfile | None:
+    """Resolve name and fetch profile for pipeline initial state."""
+    name = resolve_competitor_name(signal, sentinel)
+    if not name:
+        return None
+    return await get_competitor_profile(name)
 
 
 async def get_competitor_history(competitor: str, limit: int = 3) -> list[Report]:

@@ -38,3 +38,4 @@ htmlcov/
 
 # Generated
 *.pdf
+reports_output/

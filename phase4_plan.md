@@ -7,6 +7,25 @@
 
 ---
 
+## Dev 2 foundation branch (PUSHED FIRST)
+
+Dev 2 landed the shared contract + infrastructure. **Dev 4: rebase onto this commit, do not re-add these types.**
+
+| Done | File |
+|------|------|
+| ✅ | `schemas.py` — `VerificationOutput`, `CompetitorProfile`, `ResearchAgenda`, `CeoQaPair`, `ceo_qa_pairs`, `resolved_competitor` |
+| ✅ | `tables.py` — `competitor_profiles` |
+| ✅ | `context.py` — `get/upsert_competitor_profile`, `competitor_profile_prompt_block` |
+| ✅ | `state.py` — `verification_output`, `competitor_profile` |
+| ✅ | `verifier.py` — multi-step skeptical verification |
+| ✅ | `graph.py` — strict gate + profile preload |
+| ✅ | `background.py` — profile write-back + PDF |
+| ✅ | `profile_writer.py`, `pdf_generator.py`, `seed_column4_demo.py` |
+
+**Dev 4 owns next:** `sentinel.py`, `scout.py`, `strategist.py`, `scribe.py` only.
+
+---
+
 ## Column 4 Definition of Done (Non-Negotiable)
 
 Use this checklist at merge. **All boxes must be green** before you call Phase 4 done.

@@ -51,6 +51,27 @@ async def _migrate_schema(connection) -> None:
             """
         )
     )
+    await connection.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS competitor_profiles (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(256) NOT NULL UNIQUE,
+                profile JSONB NOT NULL DEFAULT '{}',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+    )
+    await connection.execute(
+        text(
+            """
+            CREATE INDEX IF NOT EXISTS ix_competitor_profiles_name
+            ON competitor_profiles (name)
+            """
+        )
+    )
 
 
 def set_database_available(available: bool) -> None:

@@ -10,6 +10,8 @@ from langgraph.graph.message import add_messages
 from backend.models.schemas import (
     SignalInput,
     SentinelOutput,
+    VerificationOutput,
+    CompetitorProfile,
     ResearchOutput,
     AnalysisOutput,
     ValidationResult,
@@ -46,6 +48,12 @@ class PipelineState(TypedDict, total=False):
 
     # ─── Sentinel output ───
     sentinel_output: Annotated[Optional[SentinelOutput], _replace]
+
+    # ─── Verifier output (Phase 4) ───
+    verification_output: Annotated[Optional[VerificationOutput], _replace]
+
+    # ─── Competitor institutional memory (Phase 4) ───
+    competitor_profile: Annotated[Optional[CompetitorProfile], _replace]
 
     # ─── Scout output (List for parallel fan-out) ───
     research_output: Annotated[list[ResearchOutput], _append_list]
