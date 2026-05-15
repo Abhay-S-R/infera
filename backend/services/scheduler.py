@@ -2,7 +2,7 @@
 APScheduler — periodic competitive scans for tracked competitors.
 
 Reads active competitors from the database and enqueues pipeline runs
-via the same path as POST /webhooks/scheduled.
+via enqueue_pipeline_run (same path as POST /webhooks/scheduled).
 """
 from __future__ import annotations
 
@@ -13,13 +13,30 @@ from sqlalchemy import select
 from backend.config import settings
 from backend.models.database import AsyncSessionLocal
 from backend.models.schemas import SignalInput
-from backend.models.tables import Competitor, WebhookEvent
-from backend.services.background import dispatch_pipeline
+from backend.models.tables import Competitor
+from backend.services.background import enqueue_pipeline_run
 from backend.services.logger import get_logger
 
 logger = get_logger("scheduler")
 
 _scheduler: AsyncIOScheduler | None = None
+
+
+def signal_for_competitor(competitor: Competitor) -> SignalInput:
+    """Build a SignalInput for a scheduled competitive scan."""
+    keywords = competitor.keywords or []
+    keyword_text = ", ".join(keywords) if keywords else "general market activity"
+    industry = competitor.industry or "their industry"
+
+    return SignalInput(
+        title=f"Scheduled scan: {competitor.name}",
+        source="scheduled",
+        competitor_name=competitor.name,
+        custom_question=(
+            f"What are the latest competitive developments for {competitor.name} "
+            f"in {industry}? Focus on: {keyword_text}."
+        ),
+    )
 
 
 async def run_scheduled_scans() -> None:
@@ -30,42 +47,18 @@ async def run_scheduled_scans() -> None:
         )
         competitors = result.scalars().all()
 
-        if not competitors:
-            logger.info("scheduled_scan_skipped", reason="no_active_competitors")
-            return
+    if not competitors:
+        logger.info("scheduled_scan_skipped", reason="no_active_competitors")
+        return
 
-        for competitor in competitors:
-            keywords = competitor.keywords or []
-            keyword_text = ", ".join(keywords) if keywords else "general market activity"
-            industry = competitor.industry or "their industry"
-
-            signal = SignalInput(
-                title=f"Scheduled scan: {competitor.name}",
-                source="scheduled",
-                competitor_name=competitor.name,
-                custom_question=(
-                    f"What are the latest competitive developments for {competitor.name} "
-                    f"in {industry}? Focus on: {keyword_text}."
-                ),
-            )
-            payload = signal.model_dump(exclude_none=True)
-
-            webhook = WebhookEvent(
-                source="scheduled",
-                title=signal.title,
-                url=None,
-                payload=payload,
-            )
-            session.add(webhook)
-            await session.commit()
-            await session.refresh(webhook)
-
-            logger.info(
-                "scheduled_scan_enqueued",
-                competitor=competitor.name,
-                webhook_id=webhook.id,
-            )
-            await dispatch_pipeline(webhook.id, payload)
+    for competitor in competitors:
+        signal = signal_for_competitor(competitor)
+        result = await enqueue_pipeline_run(signal, source="scheduled")
+        logger.info(
+            "scheduled_scan_enqueued",
+            competitor=competitor.name,
+            webhook_id=result["webhook_id"],
+        )
 
 
 def start_scheduler() -> AsyncIOScheduler | None:

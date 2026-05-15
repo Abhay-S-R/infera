@@ -9,7 +9,7 @@ from sqlalchemy import select
 from backend.models.database import AsyncSessionLocal
 from backend.models.tables import Workflow, Report
 from backend.models.schemas import SignalInput
-from backend.agents.graph import run_pipeline
+from backend.agents.graph import get_checkpoint_next_agent, run_pipeline
 from backend.services.checkpointer import get_checkpointer
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
@@ -131,13 +131,24 @@ async def _execute_pipeline(
             })
             logger.info("pipeline_started", workflow_id=wf_id_str, webhook_id=webhook_id)
         else:
+            next_agent = await get_checkpoint_next_agent(wf_id_str, checkpointer)
+            if next_agent:
+                workflow.current_agent = next_agent
+                session.add(workflow)
+                await session.commit()
+
             await publish_event("workflow.resumed", {
                 "workflow_id": wf_id_str,
                 "webhook_id": webhook_id,
                 "current_agent": workflow.current_agent,
-                "message": "Resuming pipeline from last checkpoint",
+                "message": f"Resuming pipeline from {workflow.current_agent}",
             })
-            logger.info("pipeline_resumed", workflow_id=wf_id_str, webhook_id=webhook_id)
+            logger.info(
+                "pipeline_resumed",
+                workflow_id=wf_id_str,
+                webhook_id=webhook_id,
+                resume_from=workflow.current_agent,
+            )
 
         try:
             if resume:
@@ -158,6 +169,31 @@ async def _execute_pipeline(
 
         except Exception as e:
             await _fail_workflow(session, workflow, wf_id_str, webhook_id, e)
+
+
+async def enqueue_pipeline_run(signal: SignalInput, *, source: str = "scheduled") -> dict[str, int]:
+    """
+    Create webhook + workflow records and start the pipeline.
+
+    Used by APScheduler and POST /webhooks/scheduled.
+    """
+    payload = signal.model_dump(exclude_none=True)
+    async with AsyncSessionLocal() as session:
+        from backend.models.tables import WebhookEvent
+
+        webhook = WebhookEvent(
+            source=source,
+            title=signal.title,
+            url=signal.url,
+            payload=payload,
+        )
+        session.add(webhook)
+        await session.commit()
+        await session.refresh(webhook)
+        webhook_id = webhook.id
+
+    await dispatch_pipeline(webhook_id, payload)
+    return {"webhook_id": webhook_id}
 
 
 async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None:
