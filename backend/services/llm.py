@@ -1,0 +1,251 @@
+"""
+ASCENT LLM Service — Gemini API wrapper.
+
+All agents call this module for LLM inference. Never call Google's SDK directly.
+
+Features:
+  - Async generate with retry + exponential backoff
+  - Structured output via Pydantic response_schema
+  - Token usage tracking per call
+  - Graceful fallback when API errors occur
+
+Usage:
+    from backend.services.llm import generate, generate_structured
+
+    # Plain text generation
+    text = await generate("Summarize this article...", system="You are an analyst.")
+
+    # Structured output (returns a Pydantic model instance)
+    result = await generate_structured(
+        prompt="Analyze this signal...",
+        response_model=SentinelOutput,
+        system="You are the Sentinel agent."
+    )
+"""
+import asyncio
+import json
+import time
+from typing import Optional, TypeVar, Type
+
+from google import genai
+from google.genai import types
+from pydantic import BaseModel
+
+from backend.config import settings
+from backend.services.logger import get_logger
+
+logger = get_logger("llm")
+
+# ─── Type var for structured output generics ───
+T = TypeVar("T", bound=BaseModel)
+
+# ─── Client singleton ───
+_client: Optional[genai.Client] = None
+
+# ─── Model configuration ───
+DEFAULT_MODEL = "gemini-2.5-flash"
+MAX_RETRIES = 3
+BASE_RETRY_DELAY = 1.0  # seconds
+
+
+def _get_client() -> genai.Client:
+    """Lazy-initialize the Gemini client."""
+    global _client
+    if _client is None:
+        if not settings.GEMINI_API_KEY:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not set. "
+                "Copy .env.example → .env and add your key."
+            )
+        _client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        logger.info("gemini_client_initialized", model=DEFAULT_MODEL)
+    return _client
+
+
+async def generate(
+    prompt: str,
+    *,
+    system: Optional[str] = None,
+    model: str = DEFAULT_MODEL,
+    temperature: float = 0.7,
+    max_output_tokens: int = 4096,
+) -> str:
+    """
+    Generate a plain-text response from Gemini.
+
+    Args:
+        prompt: The user prompt.
+        system: Optional system instruction.
+        model: Model name (default: gemini-2.0-flash).
+        temperature: Sampling temperature.
+        max_output_tokens: Max response length.
+
+    Returns:
+        Generated text string.
+
+    Raises:
+        RuntimeError: After all retries are exhausted.
+    """
+    client = _get_client()
+    config = types.GenerateContentConfig(
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+    )
+    if system:
+        config.system_instruction = system
+
+    last_error: Optional[Exception] = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        start = time.monotonic()
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            elapsed = time.monotonic() - start
+            text = response.text or ""
+
+            # Log usage
+            usage = _extract_usage(response)
+            logger.info(
+                "llm_generate_success",
+                model=model,
+                attempt=attempt,
+                elapsed_s=round(elapsed, 3),
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                char_count=len(text),
+            )
+            return text
+
+        except Exception as e:
+            last_error = e
+            elapsed = time.monotonic() - start
+            logger.warning(
+                "llm_generate_retry",
+                model=model,
+                attempt=attempt,
+                elapsed_s=round(elapsed, 3),
+                error=str(e),
+            )
+            if attempt < MAX_RETRIES:
+                delay = BASE_RETRY_DELAY * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+
+    logger.error("llm_generate_failed", model=model, error=str(last_error))
+    raise RuntimeError(f"LLM generation failed after {MAX_RETRIES} retries: {last_error}")
+
+
+async def generate_structured(
+    prompt: str,
+    response_model: Type[T],
+    *,
+    system: Optional[str] = None,
+    model: str = DEFAULT_MODEL,
+    temperature: float = 0.4,
+    max_output_tokens: int = 4096,
+) -> T:
+    """
+    Generate a structured response from Gemini, parsed into a Pydantic model.
+
+    The SDK enforces the schema natively — the LLM is constrained to output
+    valid JSON matching `response_model`.
+
+    Args:
+        prompt: The user prompt.
+        response_model: Pydantic BaseModel subclass defining the output schema.
+        system: Optional system instruction.
+        model: Model name.
+        temperature: Lower = more deterministic (good for structured output).
+        max_output_tokens: Max response length.
+
+    Returns:
+        An instance of `response_model` populated with LLM output.
+
+    Raises:
+        RuntimeError: After all retries are exhausted.
+    """
+    client = _get_client()
+    config = types.GenerateContentConfig(
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        response_mime_type="application/json",
+        response_schema=response_model,
+    )
+    if system:
+        config.system_instruction = system
+
+    last_error: Optional[Exception] = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        start = time.monotonic()
+        try:
+            response = await client.aio.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=config,
+            )
+            elapsed = time.monotonic() - start
+
+            # Try SDK's native parsed output first
+            if hasattr(response, "parsed") and response.parsed is not None:
+                result = response.parsed
+            else:
+                # Fallback: parse JSON text manually
+                raw_text = response.text or "{}"
+                data = json.loads(raw_text)
+                result = response_model.model_validate(data)
+
+            # Log usage
+            usage = _extract_usage(response)
+            logger.info(
+                "llm_structured_success",
+                model=model,
+                schema=response_model.__name__,
+                attempt=attempt,
+                elapsed_s=round(elapsed, 3),
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+            )
+            return result
+
+        except Exception as e:
+            last_error = e
+            elapsed = time.monotonic() - start
+            logger.warning(
+                "llm_structured_retry",
+                model=model,
+                schema=response_model.__name__,
+                attempt=attempt,
+                elapsed_s=round(elapsed, 3),
+                error=str(e),
+            )
+            if attempt < MAX_RETRIES:
+                delay = BASE_RETRY_DELAY * (2 ** (attempt - 1))
+                await asyncio.sleep(delay)
+
+    logger.error(
+        "llm_structured_failed",
+        model=model,
+        schema=response_model.__name__,
+        error=str(last_error),
+    )
+    raise RuntimeError(
+        f"Structured LLM generation failed after {MAX_RETRIES} retries: {last_error}"
+    )
+
+
+def _extract_usage(response) -> dict:
+    """Extract token usage from Gemini response, safely."""
+    usage = {}
+    try:
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            meta = response.usage_metadata
+            usage["prompt_tokens"] = getattr(meta, "prompt_token_count", None)
+            usage["completion_tokens"] = getattr(meta, "candidates_token_count", None)
+            usage["total_tokens"] = getattr(meta, "total_token_count", None)
+    except Exception:
+        pass  # Token tracking is best-effort
+    return usage

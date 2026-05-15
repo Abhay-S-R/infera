@@ -7,6 +7,9 @@ langgraph>=0.4.0
 langchain-core>=0.3.40
 langchain-google-genai>=2.1.0
 
+# Gemini SDK (direct)
+google-genai>=1.0.0
+
 # Web search tool
 tavily-python>=0.5.0
 
