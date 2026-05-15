@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ascent Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style2.css">
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
@@ -76,7 +77,7 @@
                 <div class="dashboard-header" style="display: flex; gap: 2rem; margin-bottom: 2rem; align-items: stretch;">
                     <!-- Manual Trigger Form -->
                     <div class="card" style="flex: 1;">
-                        <div class="card-header" style="margin-bottom: 1.5rem; color: #fff; font-size: 1.1rem;">
+                        <div class="card-header" style="margin-bottom: 1.25rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">
                             Manual Trigger
                             <div class="card-icon"><i class="ph ph-rocket-launch"></i></div>
                         </div>
@@ -91,59 +92,24 @@
                     
                     <div class="card" style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
                         <i class="ph ph-chart-line-up" style="font-size: 3rem; color: var(--accent-bright); margin-bottom: 1rem; opacity: 0.5;"></i>
-                        <h3 style="color: #fff; font-weight: 700;">System Ready</h3>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">Enter a competitor and question to launch the intelligence pipeline.</p>
+                        <h3 style="color: #fff; font-weight: 700; font-size: 1rem; letter-spacing: -0.02em;">System Ready</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.4rem; line-height: 1.6;">Enter a competitor and question to launch the intelligence pipeline.</p>
                     </div>
                 </div>
 
                 <div id="pipeline-container"></div>
 
-            <div class="grid-cards">
-                <!-- Card 1 -->
-                <div class="card">
-                    <div class="card-header">
-                        Total Revenue
-                        <div class="card-icon">
-                            <i class="ph ph-currency-dollar"></i>
-                        </div>
+                <!-- Health + Competitor Config Row -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                    <div id="health-panel" class="card">
+                        <!-- Populated by health.js -->
+                        <div class="card-header">System Health <div class="card-icon" style="background: rgba(255,255,255,0.04); color: var(--text-muted);"><i class="ph ph-heartbeat"></i></div></div>
+                        <div style="color: var(--text-muted); font-size: 0.8rem; text-align: center; padding: 1.5rem 0;">Connecting...</div>
                     </div>
-                    <div class="card-value">$48,290</div>
-                    <div class="card-trend trend-up">
-                        <i class="ph ph-trend-up"></i>
-                        <span>+12.5% from last month</span>
+                    <div id="competitor-config" class="card">
+                        <!-- Populated by competitors.js -->
                     </div>
                 </div>
-
-                <!-- Card 2 -->
-                <div class="card">
-                    <div class="card-header">
-                        Active Users
-                        <div class="card-icon" style="color: #10b981; background: rgba(16, 185, 129, 0.08);">
-                            <i class="ph ph-users"></i>
-                        </div>
-                    </div>
-                    <div class="card-value">2,405</div>
-                    <div class="card-trend trend-up">
-                        <i class="ph ph-trend-up"></i>
-                        <span>+5.2% from last month</span>
-                    </div>
-                </div>
-
-                <!-- Card 3 -->
-                <div class="card">
-                    <div class="card-header">
-                        Bounce Rate
-                        <div class="card-icon" style="color: #ef4444; background: rgba(239, 68, 68, 0.08);">
-                            <i class="ph ph-chart-line-down"></i>
-                        </div>
-                    </div>
-                    <div class="card-value">24.5%</div>
-                    <div class="card-trend trend-down">
-                        <i class="ph ph-trend-down"></i>
-                        <span>-1.2% from last month</span>
-                    </div>
-                </div>
-            </div>
 
             <!-- Activity Feed Area -->
             <div class="main-chart">
@@ -170,6 +136,8 @@
     <script src="js/activity.js"></script>
     <script src="js/websocket.js"></script>
     <script src="js/reports.js"></script>
+    <script src="js/health.js"></script>
+    <script src="js/competitors.js"></script>
     <script src="js/app2.js"></script>
 </body>
 </html>
