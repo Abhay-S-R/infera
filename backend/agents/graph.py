@@ -13,8 +13,6 @@ from langgraph.graph import StateGraph, END
 from backend.agents.state import PipelineState
 from backend.models.schemas import (
     SignalInput,
-    SentinelOutput,
-    ResearchOutput,
     AnalysisOutput,
     ValidationResult,
     ReportOutput,
@@ -22,59 +20,9 @@ from backend.models.schemas import (
     ActivityEvent,
 )
 
-
-# ─── Stub Agent Nodes (will be replaced with real implementations in Phase 1) ───
-
-async def sentinel_node(state: PipelineState) -> dict:
-    """
-    Monitor agent — filters and classifies incoming signals.
-    Stub: passes everything through with high relevance.
-    """
-    signal = state.get("signal")
-    print(f"[Sentinel] Processing signal: {signal.title if signal else 'None'}")
-
-    return {
-        "sentinel_output": SentinelOutput(
-            relevance_score=0.9,
-            should_investigate=True,
-            event_type="general",
-            entities=[],
-            summary=signal.title if signal else "No signal",
-            reasoning="Stub: auto-approved for development",
-        ),
-        "current_agent": "sentinel",
-        "activity_log": [ActivityEvent(
-            agent="sentinel",
-            status=AgentStatus.DONE,
-            message="Signal classified",
-            detail=f"Relevance: 0.9 (stub)",
-        )],
-    }
-
-
-async def scout_node(state: PipelineState) -> dict:
-    """
-    Research agent — searches the web and gathers evidence.
-    Stub: returns empty research output.
-    """
-    print("[Scout] Researching...")
-
-    return {
-        "research_output": ResearchOutput(
-            queries_used=["stub query"],
-            results=[],
-            key_findings=["Stub: no real research performed yet"],
-            sources_consulted=0,
-            raw_content_summary="Stub research output — will be replaced with real Tavily searches.",
-        ),
-        "current_agent": "scout",
-        "activity_log": [ActivityEvent(
-            agent="scout",
-            status=AgentStatus.DONE,
-            message="Research complete",
-            detail="Stub: 0 sources consulted",
-        )],
-    }
+# ─── Real Agent Imports (Phase 1) ───
+from backend.agents.sentinel import sentinel_node
+from backend.agents.scout import scout_node
 
 
 async def strategist_node(state: PipelineState) -> dict:
