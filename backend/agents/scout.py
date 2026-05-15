@@ -18,6 +18,7 @@ from backend.models.schemas import (
     ActivityEvent,
     AgentStatus,
     CoverageEvaluation,
+    ResearchAgenda,
 )
 from backend.services.llm import generate, generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
@@ -27,22 +28,16 @@ from backend.services.tracing import trace_agent
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 from backend.agents.tools.url_scraper import scrape_url
+from backend.services.context import competitor_profile_prompt_block
 
 logger = get_logger("scout")
 
-QUERY_GENERATION_PROMPT = """You are a strategic competitive intelligence researcher.
+AGENDA_GENERATION_PROMPT = """You are a strategic competitive intelligence analyst.
 
-Given a signal that has been flagged for investigation, generate {num_queries} diverse web search queries
-that will help gather comprehensive intelligence about this signal.
-
-Instead of simple headline variations, generate strategic questions focusing on:
-- Product Pricing and Features
-- Executive Team and Leadership moves
-- Build vs Buy implications
-- Go-To-Market (GTM) strategy and market response
-
-Return ONLY a JSON array of query strings, nothing else.
-Example: ["query one", "query two", "query three"]"""
+Given this signal and competitor history, list the 5 research questions that would most change our strategic assessment. 
+Not search keyword variants. 
+Examples: pricing direction, build vs buy, which customer segments threatened, who built it, what they cut to ship, hiring signals for roadmap.
+Return a structured ResearchAgenda."""
 
 COVERAGE_EVAL_PROMPT = """You are a Senior Research Editor.
 Review the synthesized research findings against the original signal.
@@ -53,11 +48,12 @@ If the research is comprehensive, assign a confidence score >= 0.75.
 
 SYNTHESIS_SYSTEM_PROMPT = """You are the Scout agent — a competitive intelligence researcher.
 
-You have just completed web research on a competitive signal. Your job is to:
-1. Synthesize all the findings from multiple search results into key findings
-2. Identify the most important facts, numbers, and quotes
-3. Note any conflicting information across sources
-4. Summarize everything into a clear, evidence-based research brief
+You have just completed web research on a competitive signal guided by a strategic Research Agenda. Your job is to:
+1. Synthesize all the findings from multiple search results to explicitly answer the agenda questions.
+2. Identify the most important facts, numbers, and quotes.
+3. Note any conflicting information across sources.
+4. Summarize everything into a clear, evidence-based research brief structured around the agenda questions.
+Format answers as: "Agenda Q1: ... Answer: ..."
 
 Be factual. Cite specifics (numbers, dates, names). Don't speculate — report what the sources say."""
 
@@ -81,6 +77,9 @@ async def scout_node(state: PipelineState) -> dict:
     retry_queries = None
     if validation and validation.retry_with_queries:
         retry_queries = validation.retry_with_queries
+
+    competitor_profile = state.get("competitor_profile")
+    agenda = None
 
     wf_logger = logger.with_context(workflow_id=workflow_id, retry=retry_count)
     wf_logger.info("scout_started", title=signal.title)
@@ -113,8 +112,9 @@ async def scout_node(state: PipelineState) -> dict:
         queries = retry_queries
         wf_logger.info("scout_using_retry_queries", queries=queries)
     else:
-        queries = await _generate_queries(signal, sentinel_output, current_angle, num_queries=4, budget=budget)
-        wf_logger.info("scout_queries_generated", queries=queries)
+        agenda = await _generate_agenda(signal, sentinel_output, competitor_profile, current_angle, budget=budget)
+        queries = [q.question for q in sorted(agenda.questions, key=lambda x: x.priority, reverse=True)[:5]]
+        wf_logger.info("scout_agenda_generated", queries=queries)
 
     try:
         while loop_count < MAX_SCOUT_LOOPS:
@@ -170,7 +170,7 @@ async def scout_node(state: PipelineState) -> dict:
                     wf_logger.warning("scout_scrape_failed", url=result.url, error=str(e))
 
             # ─── Step 4: Synthesize findings with LLM ───
-            synthesis_prompt = _build_synthesis_prompt(signal, sentinel_output, all_results, scraped_content)
+            synthesis_prompt = _build_synthesis_prompt(signal, sentinel_output, all_results, scraped_content, agenda)
 
             research_output, _usage = await generate_structured(
                 prompt=synthesis_prompt,
@@ -185,6 +185,8 @@ async def scout_node(state: PipelineState) -> dict:
             research_output.queries_used = all_queries_used
             research_output.results = all_results[:15]
             research_output.sources_consulted = len(all_results)
+            if agenda:
+                research_output.agenda = agenda
             
             if loop_count >= MAX_SCOUT_LOOPS:
                 break
@@ -273,14 +275,14 @@ async def scout_node(state: PipelineState) -> dict:
         }
 
 
-async def _generate_queries(
+async def _generate_agenda(
     signal,
     sentinel_output: SentinelOutput,
+    competitor_profile,
     current_angle: str,
-    num_queries: int = 4,
     budget=None,
-) -> list[str]:
-    """Generate targeted search queries based on the signal and sentinel analysis."""
+) -> ResearchAgenda:
+    """Generate a targeted research agenda based on the signal and competitor profile."""
     prompt = (
         f"Signal: {signal.title}\n"
         f"Event Type: {sentinel_output.event_type}\n"
@@ -291,45 +293,46 @@ async def _generate_queries(
     if signal.custom_question:
         prompt += f"User's Question: {signal.custom_question}\n"
 
-    prompt += f"\nGenerate {num_queries} diverse search queries specifically focused on the '{current_angle}' angle."
+    if competitor_profile:
+        mem_block = competitor_profile_prompt_block(competitor_profile)
+        if mem_block:
+            prompt += f"\n{mem_block}\n"
 
     try:
-        raw, _usage = await generate(
+        agenda, _usage = await generate_structured(
             prompt=prompt,
-            system=QUERY_GENERATION_PROMPT.format(num_queries=num_queries),
+            response_model=ResearchAgenda,
+            system=AGENDA_GENERATION_PROMPT,
             temperature=0.5,
             model="llama-3.3-70b-versatile",
             budget=budget,
             agent="scout",
         )
-        # Parse the JSON array from the response
-        import json
-        # Strip markdown code fences if present
-        clean = raw.strip()
-        if clean.startswith("```"):
-            clean = clean.split("\n", 1)[1]
-            clean = clean.rsplit("```", 1)[0]
-        queries = json.loads(clean.strip())
-
-        if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
-            return queries[:num_queries]
+        return agenda
     except Exception as e:
-        logger.warning("scout_query_generation_fallback", error=str(e))
+        logger.warning("scout_agenda_generation_fallback", error=str(e))
 
-    # Fallback: generate basic queries from signal data
+    # Fallback agenda
+    from backend.models.schemas import ResearchQuestion
     base = signal.title
     entities = sentinel_output.entities
-    fallback = [base]
+    fallback_questions = [
+        ResearchQuestion(question=base, why_it_matters="Basic coverage", priority=5)
+    ]
     if entities:
-        fallback.append(f"{entities[0]} competitive analysis 2026")
-        fallback.append(f"{entities[0]} market impact {sentinel_output.event_type}")
-    fallback.append(f"{base} industry reaction")
-    return fallback[:num_queries]
+        fallback_questions.append(
+            ResearchQuestion(question=f"What is the market impact of {entities[0]} {sentinel_output.event_type}?", why_it_matters="Assess impact", priority=4)
+        )
+    fallback_questions.append(
+        ResearchQuestion(question=f"How does {base} affect competitors?", why_it_matters="Competitive landscape", priority=3)
+    )
+    return ResearchAgenda(questions=fallback_questions)
 
 
 def _build_synthesis_prompt(
     signal, sentinel_output: SentinelOutput,
-    results: list[SearchResult], scraped_content: list[str]
+    results: list[SearchResult], scraped_content: list[str],
+    agenda: ResearchAgenda | None = None
 ) -> str:
     """Build the synthesis prompt from search results and scraped content."""
     prompt = (
@@ -338,8 +341,15 @@ def _build_synthesis_prompt(
         f"**Type:** {sentinel_output.event_type}\n"
         f"**Entities:** {', '.join(sentinel_output.entities)}\n"
         f"**Sentinel Summary:** {sentinel_output.summary}\n\n"
-        f"## Search Results ({len(results)} found)\n\n"
     )
+    
+    if agenda and agenda.questions:
+        prompt += "## Research Agenda\n"
+        for i, q in enumerate(agenda.questions, 1):
+            prompt += f"Q{i}: {q.question}\n"
+        prompt += "\n"
+
+    prompt += f"## Search Results ({len(results)} found)\n\n"
 
     for i, r in enumerate(results[:10], 1):
         prompt += f"{i}. **{r.title}** (relevance: {r.relevance:.2f})\n"

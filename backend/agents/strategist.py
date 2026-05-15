@@ -9,7 +9,7 @@ from backend.services.context import prepare_for_strategist, research_prompt_blo
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
 from backend.services.tracing import trace_agent
-from backend.services.context import get_competitor_history
+from backend.services.context import competitor_profile_prompt_block
 
 logger = get_logger("strategist")
 
@@ -23,7 +23,8 @@ Rules:
 3. Assign a confidence score (0.0 to 1.0) based on the quality and volume of the research evidence.
 4. Ensure all claims have supporting evidence from the research.
 5. For every Insight, assign a valid InsightType ("confirmed", "inferred", or "speculative").
-6. Generate 2-3 critical strategic questions for the CEO to consider based on this intelligence.
+6. Produce exactly 5 `ceo_qa_pairs`. For each pair, anticipate a question the CEO will ask in a meeting about this signal, provide a pre-written answer, and assign a confidence level ("confirmed", "inferred", "speculative").
+7. Reference competitor shipping records and history when assessing timeline claims or delivery credibility.
 """
 
 @trace_agent("strategist")
@@ -70,13 +71,11 @@ async def strategist_node(state: PipelineState) -> dict:
             )]
         }
 
-    # Fetch competitor history if competitor is known
+    # Fetch competitor profile from state
     history_block = ""
-    if signal.competitor_name:
-        history = await get_competitor_history(signal.competitor_name, limit=3)
-        if history:
-            h_text = "\\n".join(f"- {r.title} ({r.created_at.strftime('%Y-%m-%d')})" for r in history)
-            history_block = f"\\n\\nCOMPETITOR HISTORY (Recent reports):\\n{h_text}\\n"
+    profile = state.get("competitor_profile")
+    if profile:
+        history_block = "\\n\\n" + competitor_profile_prompt_block(profile) + "\\n"
 
     # Construct the user prompt
     prompt = f"""
