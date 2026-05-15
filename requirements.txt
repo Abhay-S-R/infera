@@ -48,7 +48,7 @@ python-dotenv>=1.0.0
 markdown>=3.7
 
 # Tracing (optional)
-# omium>=0.4.0
+omium>=0.4.0
 
 # Dev
 pytest>=8.3.0

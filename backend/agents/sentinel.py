@@ -20,6 +20,7 @@ from backend.services.llm import generate_structured
 from backend.services.budget import BudgetExceededError, check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
+from backend.services.tracing import trace_agent
 from backend.agents.state import PipelineState
 
 logger = get_logger("sentinel")
@@ -35,12 +36,14 @@ Your job is to rapidly evaluate incoming signals (news, announcements, events) a
 2. **Should Investigate:** True if relevance >= 0.5, False otherwise
 3. **Event Type:** Classify as one of: product_launch, funding, acquisition, partnership, leadership_change, earnings, regulation, general
 4. **Entities:** Extract all companies, products, and key people mentioned
-5. **Summary:** One-paragraph summary of the signal
-6. **Reasoning:** Explain WHY you assigned this relevance score
+5. **Investigation Angles:** Provide exactly 3 distinct strategic angles to research (e.g., "Financial Impact", "Technical Architecture", "Market Reaction")
+6. **Summary:** One-paragraph summary of the signal
+7. **Reasoning:** Explain WHY you assigned this relevance score
 
 Be decisive. Don't hedge. If it's noise, say so. If it's critical, say so."""
 
 
+@trace_agent("sentinel")
 async def sentinel_node(state: PipelineState) -> dict:
     """
     Sentinel agent node for LangGraph.

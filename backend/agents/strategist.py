@@ -8,6 +8,8 @@ from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.context import prepare_for_strategist, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
+from backend.services.tracing import trace_agent
+from backend.services.context import get_competitor_history
 
 logger = get_logger("strategist")
 
@@ -20,8 +22,11 @@ Rules:
 2. Be concise and professional.
 3. Assign a confidence score (0.0 to 1.0) based on the quality and volume of the research evidence.
 4. Ensure all claims have supporting evidence from the research.
+5. For every Insight, assign a valid InsightType ("confirmed", "inferred", or "speculative").
+6. Generate 2-3 critical strategic questions for the CEO to consider based on this intelligence.
 """
 
+@trace_agent("strategist")
 async def strategist_node(state: PipelineState) -> dict:
     """
     Analysis agent — synthesizes research into competitive analysis.
@@ -39,14 +44,14 @@ async def strategist_node(state: PipelineState) -> dict:
         return stopped
 
     budget = get_budget(state)
-    ctx_state, research, estimated_tokens = await prepare_for_strategist(state, budget)
-    research = ctx_state.get("research_output") or research
+    ctx_state, research_list, estimated_tokens = await prepare_for_strategist(state, budget)
+    research_list = ctx_state.get("research_output") or research_list
     tier = budget.tier()
     log.info("strategist_context_ready", estimated_state_tokens=estimated_tokens, tier=tier)
 
     # If there's no research output, we can't do much
-    if not research or not research.key_findings:
-        log.warning("strategist_no_research", reason="Research output is empty or missing")
+    if not research_list:
+        log.warning("strategist_no_research", reason="Research list is empty")
         return {
             "analysis_output": AnalysisOutput(
                 executive_summary="No research was provided to analyze.",
@@ -65,20 +70,28 @@ async def strategist_node(state: PipelineState) -> dict:
             )]
         }
 
+    # Fetch competitor history if competitor is known
+    history_block = ""
+    if signal.competitor_name:
+        history = await get_competitor_history(signal.competitor_name, limit=3)
+        if history:
+            h_text = "\\n".join(f"- {r.title} ({r.created_at.strftime('%Y-%m-%d')})" for r in history)
+            history_block = f"\\n\\nCOMPETITOR HISTORY (Recent reports):\\n{h_text}\\n"
+
     # Construct the user prompt
     prompt = f"""
 SIGNAL (What happened):
 Title: {signal.title}
 Source: {signal.source}
-Content/Context: {signal.content or 'None'}
+Content/Context: {signal.content or 'None'}{history_block}
 
-RESEARCH FINDINGS (Evidence gathered):
-{research_prompt_block(research, tier=tier)}
+RESEARCH FINDINGS (Evidence gathered from multiple parallel scouts):
+{research_prompt_block(research_list, tier=tier)}
 
 Based on the above, produce a complete competitive analysis.
 """
 
-    log.info("strategist_generating_analysis", queries_used=len(research.queries_used))
+    log.info("strategist_generating_analysis", angles_researched=len(research_list))
     
     try:
         # Call the LLM

@@ -9,23 +9,24 @@ from backend.services.context import prepare_for_scribe
 from backend.agents.state import PipelineState
 from backend.models.schemas import ReportOutput, ActivityEvent, AgentStatus
 from datetime import datetime, timezone
+from backend.services.tracing import trace_agent
 
 logger = get_logger("scribe")
 
 SYSTEM_PROMPT = """You are an Executive Report Writer for a top-tier competitive intelligence firm.
-Your job is to take structured competitive analysis and research, and produce FOUR audience-specific Markdown briefs plus one combined report.
+Your job is to take structured competitive analysis and research, and weave it into 4 targeted, highly readable, beautifully formatted Markdown documents.
 
 Rules:
-1. **exec_markdown** — CEO brief: 3–5 bullets, strategic implications, decision asks. No jargon.
-2. **tech_markdown** — Engineering brief: architecture/product impact, integration risks, build vs buy, technical citations.
-3. **sales_markdown** — GTM brief: competitive positioning, talk tracks, objection handling, deal impact.
-4. **risk_markdown** — Risk/compliance brief: regulatory exposure, reputational risk, mitigation steps, confidence caveats.
-5. **full_report_markdown** — Combined polished report with Executive Summary, Detailed Insights, Market Impact, Strategic Recommendations.
-6. Each field must be valid, self-contained markdown with clear headings.
-7. **executive_summary** — 2–3 sentence plain-text summary for email subject previews.
-8. Create a catchy, professional **title**.
+1. You must generate 4 distinct documents:
+   - Executive Brief (for CEO/Leadership): Focus on high-level impact and CEO questions.
+   - Technical Brief (for Engineering/Product): Focus on features, tech stack, and build vs buy.
+   - Sales Brief (for GTM teams): Focus on pricing, positioning, and objection handling.
+   - Risk Brief (for Legal/Risk): Focus on compliance, vulnerabilities, and market risks.
+2. Use markdown formatting with clear headings, bullet points, and bold text for emphasis.
+3. Create a catchy, professional title for the overall report.
 """
 
+@trace_agent("scribe")
 async def scribe_node(state: PipelineState) -> dict:
     """
     Report agent — generates the final deliverable.
@@ -59,10 +60,11 @@ async def scribe_node(state: PipelineState) -> dict:
             )]
         }
 
-    # Extract sources from research
+    # Extract sources from research (now a list from parallel scouts)
     sources = []
-    if research and research.results:
-        sources = [res.url for res in research.results if res.url]
+    if research:
+        for r in research:
+            sources.extend([res.url for res in r.results if res.url])
 
     # Construct the user prompt
     prompt = f"""
@@ -76,12 +78,15 @@ Market Impact: {analysis.market_impact}
 Competitive Positioning: {analysis.competitive_positioning}
 
 INSIGHTS:
-{chr(10).join(f"- {i.insight} (Impact: {i.impact})" for i in analysis.insights)}
+{chr(10).join(f"- {i.insight} ({i.type}, Impact: {i.impact})" for i in analysis.insights)}
 
 RECOMMENDATIONS:
 {chr(10).join(f"- {r}" for r in analysis.strategic_recommendations)}
 
-Please generate the final structured report.
+CEO QUESTIONS:
+{chr(10).join(f"- {q}" for q in analysis.ceo_questions)}
+
+Please generate the 4 final targeted briefs based on this intelligence.
 """
 
     log.info("scribe_generating_report")
@@ -93,7 +98,7 @@ Please generate the final structured report.
             response_model=ReportOutput,
             system=SYSTEM_PROMPT,
             temperature=0.4,
-            model="llama-3.3-70b-versatile",
+            model="gemini-3.1-flash-lite",
             max_output_tokens=8192,
             budget=budget,
             agent="scribe",
