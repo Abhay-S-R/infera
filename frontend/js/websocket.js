@@ -25,14 +25,18 @@ function initWebSocket() {
                         payload = data.payload;
                     }
 
+                    const eventType = data.type || payload.event_type || '';
                     if (window.addActivityEvent) {
-                        window.addActivityEvent(payload);
+                        window.addActivityEvent({ ...payload, event_type: eventType });
                     }
-                    
+
                     // Allow either node or agent key for pipeline status
                     const agentName = payload.agent || payload.node;
                     if (agentName && payload.status && typeof updatePipelineStatus === 'function') {
                         updatePipelineStatus(agentName, payload.status);
+                    }
+                    if (eventType === 'verifier.rejected' && typeof updatePipelineStatus === 'function') {
+                        updatePipelineStatus('verifier', 'error');
                     }
                 } catch (e) {
                     console.error('Error parsing WebSocket message', e);
