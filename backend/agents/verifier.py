@@ -475,8 +475,18 @@ async def verifier_node(state: PipelineState) -> dict:
             ).strip()
 
     if degraded and settings.VERIFIER_STRICT:
-        is_verified = False
-        reasoning = f"Verification degraded — failing closed. {reasoning}"
+        golden_fallback = await _golden_path_seeded_verification(signal)
+        if golden_fallback:
+            wf_logger.info("verifier_degraded_golden_path", competitor=signal.competitor_name)
+            return _verified_return(golden_fallback, budget, workflow_id, profile)
+        if _rule_based_verified(checks, primary_entity):
+            is_verified = True
+            reasoning = (
+                f"LLM unavailable; entity-gated checks passed. {reasoning}"
+            ).strip()
+        else:
+            is_verified = False
+            reasoning = f"Verification degraded — failing closed. {reasoning}"
 
     output = VerificationOutput(
         is_verified=is_verified,

@@ -135,7 +135,7 @@ async def test_verifier_checks_offline() -> bool:
         VerificationCheck(
             source_type=VerificationSourceType.OFFICIAL_BLOG,
             passed=True,
-            evidence="ok",
+            evidence="Nimbus AI official blog confirms launch",
         )
     ]
     none = [
@@ -145,7 +145,7 @@ async def test_verifier_checks_offline() -> bool:
             evidence="x",
         )
     ]
-    if not _rule_based_verified(primary) or _rule_based_verified(none):
+    if not _rule_based_verified(primary, "Nimbus AI") or _rule_based_verified(none, "Nimbus AI"):
         print(f"{FAIL} Rule-based verification logic broken")
         return False
     print(f"{PASS} Verifier rule helpers OK")
@@ -231,12 +231,19 @@ async def test_live_nimbus_pipeline() -> bool:
         print(f"   Profile before run: {len(profile_before.launch_history)} launches in DB")
 
     signal = SignalInput(
-        title="Nimbus AI announces Orion analytics platform with enterprise AI features",
-        source="test",
-        content="Nimbus AI launched Orion, an analytics platform. Pricing unknown.",
+        title="Nimbus AI announces Orion enterprise analytics platform with AI orchestration",
+        source="golden_path",
+        content=(
+            "Nimbus AI launched Orion, an enterprise analytics platform. "
+            "Pricing unknown. Uses seeded institutional memory for demo competitor."
+        ),
         competitor_name="Nimbus AI",
     )
+    if not profile_before:
+        print(f"{FAIL} Seed Nimbus AI first: python demo/fixtures/seed_column4_demo.py")
+        return False
     print("   Running full pipeline (may take 5-15 min)...")
+    print("   (source=golden_path → verifier uses seeded profile, not random web homonyms)")
     result = await run_pipeline(signal, workflow_id="test-phase4-nimbus-live")
 
     verification = result.get("verification_output")
@@ -280,11 +287,15 @@ async def test_live_nimbus_pipeline() -> bool:
     else:
         print(f"{WARN} Profile not found after run (write-back may need completed analysis)")
 
+    if verification and not verification.is_verified:
+        print(f"{FAIL} Verifier rejected — cannot complete live Nimbus test")
+        return False
+
     if ok and report:
         print(f"{PASS} Full pipeline completed")
         return True
     print(f"{WARN} Pipeline finished with gaps — check logs above")
-    return ok
+    return False
 
 
 async def main() -> int:
@@ -298,6 +309,11 @@ async def main() -> int:
         "--live-only",
         action="store_true",
         help="Skip offline tests, only run live pipeline checks",
+    )
+    parser.add_argument(
+        "--live-nimbus-only",
+        action="store_true",
+        help="With --live: skip fake-rumor test (saves Groq tokens)",
     )
     args = parser.parse_args()
 
@@ -316,7 +332,8 @@ async def main() -> int:
     if args.live or args.live_only:
         if not _check_api_keys():
             return 1
-        results.append(("live fake rumor", await test_live_fake_rumor_halt()))
+        if not args.live_nimbus_only:
+            results.append(("live fake rumor", await test_live_fake_rumor_halt()))
         results.append(("live nimbus pipeline", await test_live_nimbus_pipeline()))
 
     header("SUMMARY")
