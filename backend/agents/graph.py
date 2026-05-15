@@ -61,6 +61,17 @@ def should_retry_or_proceed(state: PipelineState) -> str:
     return "scribe"     # Proceed to report generation
 
 
+def should_analyze_or_skip(state: PipelineState) -> str:
+    """After Scout: proceed to Strategist if research has data, else skip to Scribe."""
+    if _budget_stopped(state):
+        return "end"
+    research = state.get("research_output")
+    if research and research.sources_consulted > 0 and research.key_findings:
+        return "strategist"
+    # No sources found — skip analysis, let Scribe generate an "insufficient data" report
+    return "scribe"
+
+
 # ─── Graph Builder ───
 
 def build_graph(checkpointer=None):
@@ -92,8 +103,16 @@ def build_graph(checkpointer=None):
         },
     )
 
-    # Scout → Strategist (always)
-    builder.add_edge("scout", "strategist")
+    # Scout → conditional: analyze if we have data, else skip to report
+    builder.add_conditional_edges(
+        "scout",
+        should_analyze_or_skip,
+        {
+            "strategist": "strategist",  # Has research data
+            "scribe": "scribe",          # No sources → "insufficient data" report
+            "end": END,
+        },
+    )
 
     # Strategist → Arbiter (always)
     builder.add_edge("strategist", "arbiter")

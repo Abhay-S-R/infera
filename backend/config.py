@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db"
-    DATABASE_URL_SYNC: str = "postgresql://ascent:ascent_pass@localhost:5433/ascent_db"
+    DATABASE_URL: str = "postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db"
+    DATABASE_URL_SYNC: str = "postgresql://ascent:ascent_pass@localhost:5432/ascent_db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Optional integrations

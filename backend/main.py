@@ -31,7 +31,7 @@ app.include_router(websocket.router)
 @app.on_event("startup")
 async def on_startup() -> None:
     await init_db()
-    init_checkpointer()
+    await init_checkpointer()
     await resume_interrupted_workflows()
     start_scheduler()
 
@@ -39,7 +39,7 @@ async def on_startup() -> None:
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
     stop_scheduler()
-    shutdown_checkpointer()
+    await shutdown_checkpointer()
 
 
 @app.get("/health")

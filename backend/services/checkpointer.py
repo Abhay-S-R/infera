@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
 from backend.config import settings
 from backend.services.logger import get_logger
@@ -15,32 +15,32 @@ from backend.services.logger import get_logger
 logger = get_logger("checkpointer")
 
 _cm: Optional[object] = None
-_saver: Optional[PostgresSaver] = None
+_saver: Optional[AsyncPostgresSaver] = None
 
 
-def init_checkpointer() -> PostgresSaver:
-    """Create checkpointer tables and return the shared PostgresSaver instance."""
+async def init_checkpointer() -> AsyncPostgresSaver:
+    """Create checkpointer tables and return the shared AsyncPostgresSaver instance."""
     global _cm, _saver
     if _saver is not None:
         return _saver
 
-    _cm = PostgresSaver.from_conn_string(settings.DATABASE_URL_SYNC)
-    _saver = _cm.__enter__()
-    _saver.setup()
+    _cm = AsyncPostgresSaver.from_conn_string(settings.DATABASE_URL_SYNC)
+    _saver = await _cm.__aenter__()
+    await _saver.setup()
     logger.info("checkpointer_ready")
     return _saver
 
 
-def get_checkpointer() -> PostgresSaver:
+async def get_checkpointer() -> AsyncPostgresSaver:
     if _saver is None:
-        return init_checkpointer()
+        return await init_checkpointer()
     return _saver
 
 
-def shutdown_checkpointer() -> None:
+async def shutdown_checkpointer() -> None:
     global _cm, _saver
     if _cm is not None:
-        _cm.__exit__(None, None, None)
+        await _cm.__aexit__(None, None, None)
         _cm = None
         _saver = None
         logger.info("checkpointer_shutdown")

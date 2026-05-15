@@ -114,7 +114,7 @@ async def _execute_pipeline(
 ) -> None:
     """Run or resume the LangGraph pipeline for an existing workflow row."""
     wf_id_str = str(workflow_id)
-    checkpointer = get_checkpointer()
+    checkpointer = await get_checkpointer()
 
     async with AsyncSessionLocal() as session:
         workflow = await session.get(Workflow, workflow_id)
