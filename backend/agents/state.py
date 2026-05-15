@@ -54,6 +54,7 @@ class PipelineState(TypedDict, total=False):
 
     # ─── Competitor institutional memory (Phase 4) ───
     competitor_profile: Annotated[Optional[CompetitorProfile], _replace]
+    competitor_context: Annotated[Optional[str], _replace]  # Prompt block for agents (Dev 4)
 
     # ─── Scout output (List for parallel fan-out) ───
     research_output: Annotated[list[ResearchOutput], _append_list]

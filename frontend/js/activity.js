@@ -23,6 +23,17 @@ function isArbiterRejection(data) {
     return false;
 }
 
+function isVerifierRejection(data) {
+    if (!data) return false;
+    const agent = (data.agent || data.node || '').toLowerCase();
+    const eventType = (data.event_type || '').toLowerCase();
+    const message = (data.message || '').toLowerCase();
+
+    if (eventType === 'verifier.rejected') return true;
+    if (agent === 'verifier' && (data.status === 'error' || message.includes('unverified'))) return true;
+    return false;
+}
+
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text == null ? '' : String(text);
@@ -34,7 +45,9 @@ function addActivityEvent(rawData) {
     if (!feedContainer) return;
 
     const data = normalizeActivityPayload(rawData);
-    const rejection = isArbiterRejection(data);
+    const arbiterRejection = isArbiterRejection(data);
+    const verifierRejection = isVerifierRejection(data);
+    const rejection = arbiterRejection || verifierRejection;
 
     const item = document.createElement('div');
     item.className = 'activity-item slide-in';
@@ -58,13 +71,20 @@ function addActivityEvent(rawData) {
         ? data.status.charAt(0).toUpperCase() + data.status.slice(1)
         : '';
 
-    const rejectionBanner = rejection
-        ? `<div class="rejection-banner" role="alert">
+    let rejectionBanner = '';
+    if (verifierRejection) {
+        rejectionBanner = `<div class="rejection-banner verifier-rejection" role="alert">
+                <i class="ph ph-shield-warning"></i>
+                <strong>VERIFIER HALTED PIPELINE</strong>
+                <span>Signal failed primary-source verification</span>
+           </div>`;
+    } else if (arbiterRejection) {
+        rejectionBanner = `<div class="rejection-banner" role="alert">
                 <i class="ph ph-warning-octagon"></i>
                 <strong>ARBITER REJECTED ANALYSIS</strong>
                 <span>Pipeline sent back to Scout for re-research</span>
-           </div>`
-        : '';
+           </div>`;
+    }
 
     const detailHtml = data.detail
         ? '<div class="activity-detail">' + escapeHtml(data.detail) + '</div>'

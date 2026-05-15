@@ -18,7 +18,13 @@ from backend.models.schemas import (
     CeoQaPair,
     InsightType,
 )
-from backend.agents.verifier import _rule_based_verified, _slug_company
+from backend.agents.verifier import (
+    _apply_entity_gate,
+    _evidence_mentions_entity,
+    _resolve_primary_entity,
+    _rule_based_verified,
+    _slug_company,
+)
 from backend.services.context import competitor_profile_prompt_block, resolve_competitor_name
 from backend.models.schemas import SignalInput, SentinelOutput, EventType
 
@@ -60,15 +66,42 @@ class TestSchemasContract:
 
 
 class TestVerifierRules:
+    def test_evidence_mentions_entity(self):
+        assert _evidence_mentions_entity("Nimbus AI", "Nimbus AI launched Orion")
+        assert not _evidence_mentions_entity("Nimbus AI", "Orion Advisor Solutions Denali")
+
+    def test_entity_gate_downgrades_wrong_company(self):
+        checks = [
+            VerificationCheck(
+                source_type=VerificationSourceType.NEWS_CORROBORATION,
+                passed=True,
+                evidence="Orion Advisor launches Denali AI platform",
+            )
+        ]
+        gated = _apply_entity_gate(checks, "Nimbus AI")
+        assert gated[0].passed is False
+
+    def test_resolve_primary_entity_prefers_competitor_name(self):
+        signal = SignalInput(title="t", competitor_name="Nimbus AI")
+        sentinel = SentinelOutput(
+            relevance_score=0.8,
+            should_investigate=True,
+            event_type=EventType.PRODUCT_LAUNCH,
+            entities=["Orion", "Nimbus AI"],
+            summary="s",
+            reasoning="r",
+        )
+        assert _resolve_primary_entity(signal, sentinel) == "Nimbus AI"
+
     def test_rule_based_requires_primary_or_news(self):
         checks = [
             VerificationCheck(
                 source_type=VerificationSourceType.OFFICIAL_BLOG,
                 passed=True,
-                evidence="blog post",
+                evidence="Acme Corp official blog post confirms launch",
             )
         ]
-        assert _rule_based_verified(checks) is True
+        assert _rule_based_verified(checks, "Acme Corp") is True
 
     def test_rule_based_fails_all_fail(self):
         checks = [
@@ -83,7 +116,7 @@ class TestVerifierRules:
                 evidence="none",
             ),
         ]
-        assert _rule_based_verified(checks) is False
+        assert _rule_based_verified(checks, "Acme Corp") is False
 
     def test_slug_company(self):
         assert _slug_company("Nimbus AI") == "nimbusai"

@@ -1,7 +1,7 @@
 // frontend/js/pipeline.js
 
 function initPipeline() {
-    const nodes = ['Sentinel', 'Scout', 'Strategist', 'Arbiter', 'Scribe'];
+    const nodes = ['Sentinel', 'Verifier', 'Scout', 'Strategist', 'Arbiter', 'Scribe'];
     
     // Status color mapping
     const statusColors = {
@@ -45,8 +45,9 @@ function initPipeline() {
 
         const circle = document.createElement('div');
         circle.className = `pipeline-node ${node.toLowerCase()}`;
-        circle.style.width = '48px';
-        circle.style.height = '48px';
+        const nodeSize = nodes.length > 5 ? '40px' : '48px';
+        circle.style.width = nodeSize;
+        circle.style.height = nodeSize;
         circle.style.borderRadius = '50%';
         circle.style.background = statusColors['idle']; // default
         circle.style.border = '3px solid #0a0a0d';
@@ -56,7 +57,7 @@ function initPipeline() {
         circle.style.justifyContent = 'center';
         circle.style.color = '#fff';
         circle.style.fontWeight = '900';
-        circle.style.fontSize = '0.8rem';
+        circle.style.fontSize = nodes.length > 5 ? '0.65rem' : '0.8rem';
         circle.style.letterSpacing = '0.05em';
         circle.style.transition = 'all 0.4s ease';
         
@@ -137,7 +138,10 @@ function initPipeline() {
     container.appendChild(retryArrow);
 
     window.updatePipelineStatus = function(nodeName, status) {
-        const nodeKey = nodeName.toLowerCase();
+        let nodeKey = nodeName.toLowerCase();
+        if (nodeKey === 'profile_loader' || nodeKey === 'profileloader') {
+            nodeKey = 'sentinel';
+        }
         
         // Reset all nodes to idle initially if it's Sentinel running (new run)
         if (nodeKey === 'sentinel' && (status === 'running' || status === 'active')) {

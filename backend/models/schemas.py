@@ -301,3 +301,15 @@ class CompetitorResponse(BaseModel):
     keywords: list[str] = Field(default_factory=list)
     active: bool = True
     created_at: datetime
+
+
+class CompetitorProfileResponse(BaseModel):
+    """Institutional memory for a competitor (Phase 4)."""
+    competitor_name: str
+    shipping_record: str = ""
+    launch_history: list[LaunchHistoryEntry] = Field(default_factory=list)
+    hiring_signals: list[str] = Field(default_factory=list)
+    ceo_public_statements: list[str] = Field(default_factory=list)
+    last_assessment: str = ""
+    updated_at: Optional[datetime] = None
+    found: bool = True

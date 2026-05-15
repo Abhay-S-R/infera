@@ -4,8 +4,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import require_database
 from backend.models.database import AsyncSessionLocal
-from backend.models.schemas import CompetitorCreate, CompetitorResponse
+from backend.models.schemas import (
+    CompetitorCreate,
+    CompetitorProfileResponse,
+    CompetitorResponse,
+)
 from backend.models.tables import Competitor
+from backend.services.context import get_competitor_profile
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_database)])
 
@@ -47,6 +52,29 @@ async def create_competitor(
     await session.commit()
     await session.refresh(competitor)
     return _to_response(competitor)
+
+
+@router.get("/competitors/{competitor_name}/profile", response_model=CompetitorProfileResponse)
+async def get_competitor_institutional_memory(
+    competitor_name: str,
+) -> CompetitorProfileResponse:
+    """Return structured institutional memory for demo / dashboard."""
+    profile = await get_competitor_profile(competitor_name)
+    if not profile:
+        return CompetitorProfileResponse(
+            competitor_name=competitor_name,
+            found=False,
+        )
+    return CompetitorProfileResponse(
+        competitor_name=profile.competitor_name,
+        shipping_record=profile.shipping_record,
+        launch_history=profile.launch_history,
+        hiring_signals=profile.hiring_signals,
+        ceo_public_statements=profile.ceo_public_statements,
+        last_assessment=profile.last_assessment,
+        updated_at=profile.updated_at,
+        found=True,
+    )
 
 
 @router.delete("/competitors/{competitor_id}", status_code=204)

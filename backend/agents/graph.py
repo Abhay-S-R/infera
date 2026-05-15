@@ -2,9 +2,9 @@
 ASCENT Agent Graph — LangGraph StateGraph defining the full agent pipeline.
 
 Flow:
-  Sentinel → Scout → Strategist → Arbiter → Scribe
-                ↑                      |
-                └──── retry loop ──────┘
+  Sentinel → ProfileLoader → Verifier → Scout(s) → Strategist → Arbiter → Scribe
+                                      ↑                        |
+                                      └──── retry loop ────────┘
 
 Dev 2 owns this file. Agent implementations are in their own files.
 """
@@ -28,6 +28,7 @@ from backend.agents.sentinel import sentinel_node
 from backend.agents.scout import scout_node
 from backend.agents.arbiter import arbiter_node
 from backend.agents.verifier import verifier_node
+from backend.agents.profile_loader import profile_loader_node
 from backend.services.budget import TokenBudget
 from backend.services.context import load_competitor_profile_for_pipeline
 
@@ -41,14 +42,21 @@ def _budget_stopped(state: PipelineState) -> bool:
     return "budget exceeded" in err.lower()
 
 
-def should_verify(state: PipelineState) -> str:
-    """After Sentinel: proceed to Verifier if signal is worth investigating."""
+def should_load_profile(state: PipelineState) -> str:
+    """After Sentinel: load institutional memory if investigating."""
     if _budget_stopped(state):
         return "end"
     sentinel = state.get("sentinel_output")
     if sentinel and sentinel.should_investigate:
-        return "verifier"
+        return "profile_loader"
     return "end"
+
+
+def should_verify(state: PipelineState) -> str:
+    """After ProfileLoader: proceed to Verifier."""
+    if _budget_stopped(state):
+        return "end"
+    return "verifier"
 
 
 def should_continue_to_scouts(state: PipelineState):
@@ -119,6 +127,7 @@ def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None)
 
     # Add nodes
     builder.add_node("sentinel", sentinel_node)
+    builder.add_node("profile_loader", profile_loader_node)
     builder.add_node("verifier", verifier_node)
     builder.add_node("scout", scout_node)
     builder.add_node("strategist", strategist_node)
@@ -128,9 +137,19 @@ def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None)
     # Set entry point
     builder.set_entry_point("sentinel")
 
-    # Sentinel → Verifier or END
+    # Sentinel → ProfileLoader or END
     builder.add_conditional_edges(
         "sentinel",
+        should_load_profile,
+        {
+            "profile_loader": "profile_loader",
+            "end": END,
+        },
+    )
+
+    # ProfileLoader → Verifier
+    builder.add_conditional_edges(
+        "profile_loader",
         should_verify,
         {
             "verifier": "verifier",

@@ -12,12 +12,22 @@ Rebase onto Dev 2's branch. **Only edit these files:**
 
 ---
 
+## Dev 2 follow-up (after foundation)
+
+- `profile_loader` node: Sentinel → **profile_loader** → Verifier → Scouts
+- `state["competitor_context"]` — formatted memory block (use in Scout/Strategist prompts)
+- `golden_path` source → verifier uses **seeded profile**, not random "Orion" web hits
+- `GET /api/competitors/{name}/profile` — institutional memory API
+- `verifier.rejected` WebSocket event + UI banner
+- `demo/fixtures/golden_path.py`, `scripts/demo_webhooks.sh`
+
 ## What Dev 2 gave you
 
 ### Read from state
 
 ```python
 profile = state.get("competitor_profile")  # CompetitorProfile | None
+context = state.get("competitor_context")  # str prompt block — inject into Scout/Strategist
 verification = state.get("verification_output")  # set by Verifier — don't re-verify
 ```
 

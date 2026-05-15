@@ -23,7 +23,10 @@ from backend.services.budget import check_budget_or_stop, get_budget
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.services.tracing import trace_agent
-from backend.services.context import load_competitor_profile_for_pipeline
+from backend.services.context import (
+    get_competitor_profile,
+    load_competitor_profile_for_pipeline,
+)
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 from backend.agents.tools.url_scraper import scrape_url
@@ -43,7 +46,10 @@ Rules (strict):
 - When checks are inconclusive but multiple credible outlets report the same announcement → VERIFIED.
 - When checks found nothing matching the headline → UNVERIFIED (likely fabricated or premature leak).
 
-You are a gate against hallucinated signals. When in doubt, REJECT (is_verified=false)."""
+You are a gate against hallucinated signals. When in doubt, REJECT (is_verified=false).
+
+CRITICAL: The primary competitor is given as **Primary entity**. Evidence about a different
+company (e.g. a homonym product name) does NOT count. Reject if checks only match the wrong company."""
 
 
 def _slug_company(name: str) -> str:
@@ -55,6 +61,98 @@ def _slug_company(name: str) -> str:
 def _guess_domains(entity: str) -> list[str]:
     slug = _slug_company(entity)
     return [f"{slug}.com", f"www.{slug}.com", f"blog.{slug}.com"]
+
+
+def _resolve_primary_entity(signal: SignalInput, sentinel: SentinelOutput) -> str:
+    """Prefer explicit competitor_name over short product codenames in entities."""
+    if signal.competitor_name and signal.competitor_name.strip():
+        return signal.competitor_name.strip()
+    if sentinel.entities:
+        return max(sentinel.entities, key=len).strip()
+    return "company"
+
+
+def _entity_tokens(entity: str) -> list[str]:
+    """Significant tokens for matching (e.g. 'Nimbus AI' -> ['nimbus'])."""
+    stop = {"inc", "corp", "ltd", "the", "and", "for", "with", "from"}
+    tokens = [
+        t for t in re.findall(r"[a-z0-9]{3,}", entity.lower())
+        if t not in stop
+    ]
+    return tokens or [entity.lower()]
+
+
+def _evidence_mentions_entity(entity: str, text: str) -> bool:
+    """True if text plausibly refers to the primary competitor, not a homonym."""
+    if not entity or not text:
+        return False
+    lower = text.lower()
+    tokens = _entity_tokens(entity)
+    return any(tok in lower for tok in tokens)
+
+
+def _apply_entity_gate(
+    checks: list[VerificationCheck],
+    primary_entity: str,
+) -> list[VerificationCheck]:
+    """Downgrade passes that cite the wrong company (e.g. Orion Advisor vs Nimbus AI)."""
+    gated: list[VerificationCheck] = []
+    for check in checks:
+        if not check.passed:
+            gated.append(check)
+            continue
+        blob = f"{check.evidence} {check.url or ''}"
+        if _evidence_mentions_entity(primary_entity, blob):
+            gated.append(check)
+            continue
+        gated.append(
+            VerificationCheck(
+                source_type=check.source_type,
+                passed=False,
+                url=check.url,
+                evidence=(
+                    f"Wrong entity (expected '{primary_entity}'): {check.evidence[:200]}"
+                ),
+            )
+        )
+    return gated
+
+
+async def _golden_path_seeded_verification(
+    signal: SignalInput,
+) -> VerificationOutput | None:
+    """
+    Demo competitor with seeded DB profile: accept signal for pipeline exercise.
+
+    Avoids false passes on homonyms (Orion Advisor, etc.) when Nimbus AI is fictional.
+    """
+    if (signal.source or "").lower() != "golden_path":
+        return None
+    if not signal.competitor_name:
+        return None
+    profile = await get_competitor_profile(signal.competitor_name)
+    if not profile:
+        return None
+    content = f"{signal.title} {signal.content or ''}"
+    if not _evidence_mentions_entity(signal.competitor_name, content):
+        return None
+    return VerificationOutput(
+        is_verified=True,
+        reasoning=(
+            f"Golden path demo: '{signal.competitor_name}' has seeded institutional memory "
+            f"({len(profile.launch_history)} prior launches on record). Accepting signal for "
+            "controlled pipeline demonstration."
+        ),
+        checks=[
+            VerificationCheck(
+                source_type=VerificationSourceType.SIGNAL_URL,
+                passed=True,
+                evidence=(
+                    f"Seeded competitor profile: {profile.shipping_record[:120]}"
+                ),
+            ),
+        ],
+    )
 
 
 def _demo_verification_bypass(signal: SignalInput) -> bool:
@@ -107,11 +205,17 @@ async def _check_official_blog(entity: str, title: str) -> VerificationCheck:
         results = await search_web(f"site:{domains[0]} {title[:60]}", max_results=3)
     if results:
         top = results[0]
+        blob = f"{top.title} {top.snippet}"
+        passed = _evidence_mentions_entity(entity, blob)
         return VerificationCheck(
             source_type=VerificationSourceType.OFFICIAL_BLOG,
-            passed=True,
+            passed=passed,
             url=top.url,
-            evidence=f"Official-domain hit: {top.title} — {top.snippet[:200]}",
+            evidence=(
+                f"Official-domain hit: {top.title} — {top.snippet[:200]}"
+                if passed
+                else f"Official domain result does not mention '{entity}': {top.title[:80]}"
+            ),
         )
     return VerificationCheck(
         source_type=VerificationSourceType.OFFICIAL_BLOG,
@@ -125,13 +229,15 @@ async def _check_product_page(entity: str, title: str) -> VerificationCheck:
     results = await search_web(query, max_results=3, search_depth="basic")
     for r in results:
         lower = r.url.lower()
+        blob = f"{r.title} {r.snippet}"
         if any(x in lower for x in ("/pricing", "/product", "/signup", "/register", "/demo")):
-            return VerificationCheck(
-                source_type=VerificationSourceType.PRODUCT_PAGE,
-                passed=True,
-                url=r.url,
-                evidence=f"Product/pricing surface found: {r.title}",
-            )
+            if _evidence_mentions_entity(entity, blob):
+                return VerificationCheck(
+                    source_type=VerificationSourceType.PRODUCT_PAGE,
+                    passed=True,
+                    url=r.url,
+                    evidence=f"Product/pricing surface found: {r.title}",
+                )
     if results:
         return VerificationCheck(
             source_type=VerificationSourceType.PRODUCT_PAGE,
@@ -151,11 +257,17 @@ async def _check_linkedin(entity: str, title: str) -> VerificationCheck:
     results = await search_web(query, max_results=3)
     if results:
         top = results[0]
+        blob = f"{top.title} {top.snippet}"
+        passed = _evidence_mentions_entity(entity, blob)
         return VerificationCheck(
             source_type=VerificationSourceType.LINKEDIN,
-            passed=True,
+            passed=passed,
             url=top.url,
-            evidence=f"LinkedIn mention: {top.snippet[:200]}",
+            evidence=(
+                f"LinkedIn mention: {top.snippet[:200]}"
+                if passed
+                else f"LinkedIn hit does not mention '{entity}'"
+            ),
         )
     return VerificationCheck(
         source_type=VerificationSourceType.LINKEDIN,
@@ -167,7 +279,12 @@ async def _check_linkedin(entity: str, title: str) -> VerificationCheck:
 async def _check_news_corroboration(entity: str, title: str) -> VerificationCheck:
     query = f"{entity} {title[:100]}"
     results = await search_web(query, max_results=5, search_depth="basic")
-    credible = [r for r in results if r.relevance >= 0.35]
+    credible = [
+        r
+        for r in results
+        if r.relevance >= 0.35
+        and _evidence_mentions_entity(entity, f"{r.title} {r.snippet}")
+    ]
     if len(credible) >= 2:
         urls = ", ".join(r.url for r in credible[:3])
         return VerificationCheck(
@@ -194,9 +311,7 @@ async def run_verification_checks(
     sentinel: SentinelOutput,
 ) -> list[VerificationCheck]:
     """Execute ordered primary-source checks."""
-    entity = (sentinel.entities[0] if sentinel.entities else signal.competitor_name or "").strip()
-    if not entity:
-        entity = "company"
+    entity = _resolve_primary_entity(signal, sentinel)
     title = signal.title
 
     checks: list[VerificationCheck] = []
@@ -218,10 +333,10 @@ async def run_verification_checks(
             )
         )
     checks.append(await _check_news_corroboration(entity, title))
-    return checks
+    return _apply_entity_gate(checks, entity)
 
 
-def _rule_based_verified(checks: list[VerificationCheck]) -> bool:
+def _rule_based_verified(checks: list[VerificationCheck], primary_entity: str) -> bool:
     """Strict pre-LLM gate: primary pass OR strong news corroboration."""
     primary_types = {
         VerificationSourceType.SIGNAL_URL,
@@ -229,18 +344,17 @@ def _rule_based_verified(checks: list[VerificationCheck]) -> bool:
         VerificationSourceType.LINKEDIN,
         VerificationSourceType.SEC_FILING,
     }
-    primary_pass = any(c.passed for c in checks if c.source_type in primary_types)
+    primary_pass = any(
+        c.passed
+        for c in checks
+        if c.source_type in primary_types
+        and _evidence_mentions_entity(primary_entity, c.evidence)
+    )
     news_pass = any(
         c.passed and c.source_type == VerificationSourceType.NEWS_CORROBORATION
         for c in checks
     )
-    if primary_pass:
-        return True
-    if news_pass and settings.VERIFIER_STRICT:
-        return True
-    if news_pass and not settings.VERIFIER_STRICT:
-        return True
-    return False
+    return primary_pass or news_pass
 
 
 @trace_agent("verifier")
@@ -284,6 +398,12 @@ async def verifier_node(state: PipelineState) -> dict:
         )
         return _verified_return(output, budget, workflow_id, profile)
 
+    primary_entity = _resolve_primary_entity(signal, sentinel)
+    golden = await _golden_path_seeded_verification(signal)
+    if golden:
+        wf_logger.info("verifier_golden_path_seeded", competitor=signal.competitor_name)
+        return _verified_return(golden, budget, workflow_id, profile)
+
     checks: list[VerificationCheck] = []
     degraded = False
     try:
@@ -305,6 +425,7 @@ async def verifier_node(state: PipelineState) -> dict:
     )
     prompt = (
         f"**Signal:** {signal.title}\n"
+        f"**Primary entity (must match):** {primary_entity}\n"
         f"**Event type:** {sentinel.event_type}\n"
         f"**Entities:** {', '.join(sentinel.entities)}\n\n"
         f"**Verification checks:**\n{checks_text}\n\n"
@@ -335,14 +456,18 @@ async def verifier_node(state: PipelineState) -> dict:
     except Exception as e:
         wf_logger.warning("verifier_llm_failed", error=str(e))
         degraded = True
-        is_verified = _rule_based_verified(checks) if not settings.VERIFIER_STRICT else False
+        is_verified = (
+            _rule_based_verified(checks, primary_entity)
+            if not settings.VERIFIER_STRICT
+            else False
+        )
         reasoning = (
             f"LLM decision unavailable; rule-based result={'verified' if is_verified else 'rejected'}. "
             f"Error: {str(e)[:80]}"
         )
 
     if settings.VERIFIER_STRICT and not degraded:
-        rule_ok = _rule_based_verified(checks)
+        rule_ok = _rule_based_verified(checks, primary_entity)
         if not rule_ok:
             is_verified = False
             reasoning = (
@@ -373,6 +498,15 @@ async def verifier_node(state: PipelineState) -> dict:
             "status": "error",
             "message": "Signal unverified — pipeline halted.",
             "detail": output.reasoning,
+            "workflow_id": workflow_id,
+        })
+        await publish_event("verifier.rejected", {
+            "agent": "verifier",
+            "status": "rejected",
+            "message": "Signal unverified — pipeline halted",
+            "detail": output.reasoning,
+            "checks_passed": sum(1 for c in output.checks if c.passed),
+            "checks_total": len(output.checks),
             "workflow_id": workflow_id,
         })
         return {

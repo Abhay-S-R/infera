@@ -110,11 +110,15 @@ async def _complete_workflow(
     tokens, cost = usage_from_pipeline_result(result)
     workflow.tokens_used = tokens
     workflow.estimated_cost = cost
+    extra = dict(workflow.extra_data or {})
     if budget_stopped:
-        workflow.extra_data = {
-            **(workflow.extra_data or {}),
-            "budget_error": result.get("error"),
-        }
+        extra["budget_error"] = result.get("error")
+    verification = result.get("verification_output")
+    if verification is not None:
+        extra["verification"] = verification.model_dump(mode="json")
+    if competitor_name:
+        extra["competitor_name"] = competitor_name
+    workflow.extra_data = extra
     session.add(workflow)
     await session.commit()
 
