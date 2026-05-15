@@ -23,6 +23,9 @@ from backend.models.schemas import (
 )
 
 
+from backend.agents.strategist import strategist_node
+from backend.agents.scribe import scribe_node
+
 # ─── Stub Agent Nodes (will be replaced with real implementations in Phase 1) ───
 
 async def sentinel_node(state: PipelineState) -> dict:
@@ -77,31 +80,6 @@ async def scout_node(state: PipelineState) -> dict:
     }
 
 
-async def strategist_node(state: PipelineState) -> dict:
-    """
-    Analysis agent — synthesizes research into competitive analysis.
-    Stub: returns placeholder analysis.
-    """
-    print("[Strategist] Analyzing...")
-
-    return {
-        "analysis_output": AnalysisOutput(
-            executive_summary="Stub analysis — will be replaced with real LLM reasoning.",
-            market_impact="Stub: unknown impact",
-            competitive_positioning="Stub: unknown positioning",
-            insights=[],
-            strategic_recommendations=["Stub: implement real analysis"],
-            overall_confidence=0.5,
-        ),
-        "current_agent": "strategist",
-        "activity_log": [ActivityEvent(
-            agent="strategist",
-            status=AgentStatus.DONE,
-            message="Analysis complete",
-            detail="Stub: placeholder analysis",
-        )],
-    }
-
 
 async def arbiter_node(state: PipelineState) -> dict:
     """
@@ -128,31 +106,6 @@ async def arbiter_node(state: PipelineState) -> dict:
         )],
     }
 
-
-async def scribe_node(state: PipelineState) -> dict:
-    """
-    Report agent — generates the final deliverable.
-    Stub: returns a placeholder report.
-    """
-    signal = state.get("signal")
-    print("[Scribe] Generating report...")
-
-    return {
-        "report_output": ReportOutput(
-            title=f"Intelligence Report: {signal.title if signal else 'Unknown'}",
-            executive_summary="Stub report — pipeline is wired correctly.",
-            full_report_markdown="# Stub Report\n\nThe pipeline ran end-to-end. Replace stubs with real agents.",
-            confidence_score=0.5,
-            sources=[],
-        ),
-        "current_agent": "scribe",
-        "activity_log": [ActivityEvent(
-            agent="scribe",
-            status=AgentStatus.DONE,
-            message="Report generated",
-            detail="Stub: placeholder report",
-        )],
-    }
 
 
 # ─── Routing Logic ───
