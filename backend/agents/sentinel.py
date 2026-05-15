@@ -21,6 +21,7 @@ from backend.services.budget import BudgetExceededError, check_budget_or_stop, g
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
 from backend.services.tracing import trace_agent
+from backend.services.context import competitor_profile_prompt_block
 from backend.agents.state import PipelineState
 
 logger = get_logger("sentinel")
@@ -36,9 +37,10 @@ Your job is to rapidly evaluate incoming signals (news, announcements, events) a
 2. **Should Investigate:** True if relevance >= 0.5, False otherwise
 3. **Event Type:** Classify as one of: product_launch, funding, acquisition, partnership, leadership_change, earnings, regulation, general
 4. **Entities:** Extract all companies, products, and key people mentioned
-5. **Investigation Angles:** Provide exactly 3 distinct strategic angles to research (e.g., "Financial Impact", "Technical Architecture", "Market Reaction")
+5. **Investigation Angles:** Provide exactly 3 distinct strategic angles to research (e.g., "Financial Impact", "Technical Architecture", "Market Reaction"). Use competitor history to set angles if available (e.g., if they slip launches, add "Delivery credibility").
 6. **Summary:** One-paragraph summary of the signal
 7. **Reasoning:** Explain WHY you assigned this relevance score
+8. **Resolved Competitor:** If a primary competitor company is detected, provide its canonical name here.
 
 Be decisive. Don't hedge. If it's noise, say so. If it's critical, say so."""
 
@@ -85,9 +87,16 @@ async def sentinel_node(state: PipelineState) -> dict:
     if signal.custom_question:
         prompt_parts.append(f"**User's Question:** {signal.custom_question}")
 
+    # Inject Institutional Memory
+    profile = state.get("competitor_profile")
+    if profile:
+        mem_block = competitor_profile_prompt_block(profile)
+        if mem_block:
+            prompt_parts.append(mem_block)
+
     prompt = (
         "Evaluate the following competitive intelligence signal:\n\n"
-        + "\n".join(prompt_parts)
+        + "\n\n".join(prompt_parts)
         + "\n\nClassify this signal and determine if it warrants deeper investigation."
     )
 

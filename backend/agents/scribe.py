@@ -17,12 +17,15 @@ SYSTEM_PROMPT = """You are an Executive Report Writer for a top-tier competitive
 Your job is to take structured competitive analysis and research, and weave it into 4 targeted, highly readable, beautifully formatted Markdown documents.
 
 Rules:
-1. You must generate 4 distinct documents:
-   - Executive Brief (for CEO/Leadership): Focus on high-level impact and CEO questions.
-   - Technical Brief (for Engineering/Product): Focus on features, tech stack, and build vs buy.
-   - Sales Brief (for GTM teams): Focus on pricing, positioning, and objection handling.
-   - Risk Brief (for Legal/Risk): Focus on compliance, vulnerabilities, and market risks.
-2. Use markdown formatting with clear headings, bullet points, and bold text for emphasis.
+1. You must generate 4 distinct documents with STRICT constraints:
+   - Executive Brief (for CEO/Leadership): MUST be ≤220 words. Include exactly ONE `## Decision Needed` section. Do not include CEO questions (they will be appended automatically).
+   - Technical Brief (for Engineering/Product): ~400-600 words. Focus on architecture, build vs buy, and parity timeline.
+   - Sales Brief (for GTM teams): Bulleted battle card and objection handlers.
+   - Risk Brief (for Legal/Risk): Markdown table with columns: Segment | Exposure | Why.
+2. When mentioning specific insights, you MUST prefix them with their confidence level:
+   - ✅ **CONFIRMED:**
+   - ⚠️ *INFERRED:*
+   - ❓ **SPECULATIVE:**
 3. Create a catchy, professional title for the overall report.
 """
 
@@ -78,13 +81,13 @@ Market Impact: {analysis.market_impact}
 Competitive Positioning: {analysis.competitive_positioning}
 
 INSIGHTS:
-{chr(10).join(f"- {i.insight} ({i.type}, Impact: {i.impact})" for i in analysis.insights)}
+{chr(10).join(f"- [{i.type.upper()}] {i.insight} (Impact: {i.impact})" for i in analysis.insights)}
 
 RECOMMENDATIONS:
 {chr(10).join(f"- {r}" for r in analysis.strategic_recommendations)}
 
-CEO QUESTIONS:
-{chr(10).join(f"- {q}" for q in analysis.ceo_questions)}
+CEO QA PAIRS:
+{chr(10).join(f"- Q: {qa.question} | A: {qa.answer} ({qa.confidence})" for qa in analysis.ceo_qa_pairs)}
 
 Please generate the 4 final targeted briefs based on this intelligence.
 """
@@ -107,6 +110,29 @@ Please generate the 4 final targeted briefs based on this intelligence.
         # Ensure we attach the sources correctly
         report.sources = sources
         report.generated_at = datetime.now(timezone.utc)
+        
+        # Post-process: Append CEO Q&A to Executive Brief
+        if analysis.ceo_qa_pairs:
+            qa_text = "\\n\\n## Likely CEO Questions\\n"
+            for qa in analysis.ceo_qa_pairs:
+                conf = str(qa.confidence).lower()
+                marker = "❓ **SPECULATIVE:** "
+                if "confirmed" in conf: marker = "✅ **CONFIRMED:** "
+                elif "inferred" in conf: marker = "⚠️ *INFERRED:* "
+                qa_text += f"**Q: {qa.question}**\\n{marker}{qa.answer}\\n\\n"
+            report.exec_brief += qa_text
+            
+        # Post-process: simple confidence marker enforcement if the LLM missed it
+        def format_report_with_confidence(text: str) -> str:
+            text = text.replace("[CONFIRMED]", "✅ **CONFIRMED:**")
+            text = text.replace("[INFERRED]", "⚠️ *INFERRED:*")
+            text = text.replace("[SPECULATIVE]", "❓ **SPECULATIVE:**")
+            return text
+
+        report.exec_brief = format_report_with_confidence(report.exec_brief)
+        report.tech_brief = format_report_with_confidence(report.tech_brief)
+        report.sales_brief = format_report_with_confidence(report.sales_brief)
+        report.risk_brief = format_report_with_confidence(report.risk_brief)
         
         log.info("scribe_completed", title=report.title)
         
