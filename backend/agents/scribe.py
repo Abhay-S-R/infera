@@ -82,6 +82,7 @@ Please generate the final structured report.
             system=SYSTEM_PROMPT,
             temperature=0.4, # Slightly higher temp for better writing flow
             model="llama-3.3-70b-versatile",
+            max_output_tokens=8192,
         )
         
         # Ensure we attach the sources correctly

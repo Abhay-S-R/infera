@@ -78,7 +78,8 @@ Based on the above, produce a complete competitive analysis.
             prompt=prompt,
             response_model=AnalysisOutput,
             system=SYSTEM_PROMPT,
-            temperature=0.3  # Low temp for analytical consistency
+            temperature=0.3, # Low temp for analytical consistency
+            max_output_tokens=8192
         )
         
         log.info("strategist_completed", confidence=analysis.overall_confidence)
