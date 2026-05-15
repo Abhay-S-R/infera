@@ -1,0 +1,50 @@
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Agent orchestration
+langgraph>=0.4.0
+langchain-core>=0.3.40
+langchain-google-genai>=2.1.0
+
+# Web search tool
+tavily-python>=0.5.0
+
+# Database
+asyncpg>=0.30.0
+sqlalchemy[asyncio]>=2.0.36
+psycopg[binary,pool]>=3.2.0
+
+# Redis
+redis[hiredis]>=5.2.0
+
+# LangGraph PostgreSQL checkpointer
+langgraph-checkpoint-postgres>=2.0.10
+
+# Structured outputs
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Scheduling
+apscheduler>=3.11.0
+
+# PDF generation
+fpdf2>=2.8.0
+
+# HTTP client
+httpx>=0.28.0
+beautifulsoup4>=4.12.0
+
+# Environment
+python-dotenv>=1.0.0
+
+# Markdown rendering (server-side)
+markdown>=3.7
+
+# Tracing (optional)
+# omium>=0.4.0
+
+# Dev
+pytest>=8.3.0
+pytest-asyncio>=0.25.0
+ruff>=0.8.0
