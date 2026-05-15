@@ -120,10 +120,39 @@ class ReportOutput(BaseModel):
     """Scribe agent's final report."""
     title: str
     executive_summary: str
+    exec_markdown: str = Field(description="CEO / executive audience brief (markdown)")
+    tech_markdown: str = Field(description="Engineering audience brief (markdown)")
+    sales_markdown: str = Field(description="Sales / GTM audience brief (markdown)")
+    risk_markdown: str = Field(description="Risk / compliance audience brief (markdown)")
     full_report_markdown: str = Field(description="Complete report in markdown format")
     confidence_score: float = Field(ge=0, le=1)
     sources: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReportListItem(BaseModel):
+    """Report summary for list endpoints."""
+    id: int
+    title: str
+    competitor: Optional[str] = None
+    confidence: float = 0.0
+    created_at: datetime
+
+
+class ReportDetailResponse(BaseModel):
+    """Full report with audience-specific documents."""
+    id: int
+    title: str
+    competitor: Optional[str] = None
+    confidence: float = 0.0
+    created_at: datetime
+    executive_summary: str = ""
+    full_report_markdown: str = ""
+    documents: dict[str, str] = Field(
+        default_factory=dict,
+        description='Keys: exec, tech, sales, risk',
+    )
+    sources: list[str] = Field(default_factory=list)
 
 
 # ─── Activity Events (for WebSocket feed) ───

@@ -131,6 +131,17 @@ async def arbiter_node(state: PipelineState) -> dict:
             "workflow_id": workflow_id,
         })
 
+        if not result.is_approved:
+            await publish_event("arbiter.rejected", {
+                "agent": "arbiter",
+                "status": "rejected",
+                "message": status_msg,
+                "detail": "; ".join(result.issues_found[:5]) if result.issues_found else "Validation failed",
+                "confidence": result.overall_confidence,
+                "retry_queries": result.retry_with_queries or [],
+                "workflow_id": workflow_id,
+            })
+
         return {
             "validation_result": result,
             "current_agent": "arbiter",

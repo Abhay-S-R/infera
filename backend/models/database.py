@@ -43,6 +43,14 @@ async def _migrate_schema(connection) -> None:
             """
         )
     )
+    await connection.execute(
+        text(
+            """
+            ALTER TABLE reports
+            ADD COLUMN IF NOT EXISTS documents JSONB
+            """
+        )
+    )
 
 
 def set_database_available(available: bool) -> None:

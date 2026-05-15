@@ -13,14 +13,17 @@ from datetime import datetime, timezone
 logger = get_logger("scribe")
 
 SYSTEM_PROMPT = """You are an Executive Report Writer for a top-tier competitive intelligence firm.
-Your job is to take structured competitive analysis and research, and weave it into a highly readable, beautifully formatted Markdown report.
+Your job is to take structured competitive analysis and research, and produce FOUR audience-specific Markdown briefs plus one combined report.
 
 Rules:
-1. The report must be highly professional, structured with clear headings, bullet points, and bold text for emphasis.
-2. Ensure you include an Executive Summary, Detailed Insights, Market Impact, and Strategic Recommendations sections.
-3. Incorporate source citations smoothly where appropriate.
-4. Your output MUST be valid markdown inside the `full_report_markdown` field.
-5. Create a catchy, professional title.
+1. **exec_markdown** — CEO brief: 3–5 bullets, strategic implications, decision asks. No jargon.
+2. **tech_markdown** — Engineering brief: architecture/product impact, integration risks, build vs buy, technical citations.
+3. **sales_markdown** — GTM brief: competitive positioning, talk tracks, objection handling, deal impact.
+4. **risk_markdown** — Risk/compliance brief: regulatory exposure, reputational risk, mitigation steps, confidence caveats.
+5. **full_report_markdown** — Combined polished report with Executive Summary, Detailed Insights, Market Impact, Strategic Recommendations.
+6. Each field must be valid, self-contained markdown with clear headings.
+7. **executive_summary** — 2–3 sentence plain-text summary for email subject previews.
+8. Create a catchy, professional **title**.
 """
 
 async def scribe_node(state: PipelineState) -> dict:
@@ -99,6 +102,8 @@ Please generate the final structured report.
         # Ensure we attach the sources correctly
         report.sources = sources
         report.generated_at = datetime.now(timezone.utc)
+        if not report.full_report_markdown and report.exec_markdown:
+            report.full_report_markdown = report.exec_markdown
         
         log.info("scribe_completed", title=report.title)
         
