@@ -17,16 +17,15 @@ function initPipeline() {
     if (!container) return;
 
     // Setup container styles
-    container.style.background = 'var(--card-bg)';
-    container.style.border = '1px solid var(--border-color)';
-    container.style.borderRadius = '16px';
-    container.style.padding = '3rem 2rem';
-    container.style.marginBottom = '2rem';
+    container.style.background = 'rgba(12, 12, 16, 0.95)';
+    container.style.border = '1px solid rgba(255, 255, 255, 0.205)';
+    container.style.borderRadius = '12px';
+    container.style.padding = '2.5rem 2rem';
+    container.style.marginBottom = '1.5rem';
     container.style.display = 'flex';
     container.style.alignItems = 'center';
     container.style.justifyContent = 'space-between';
     container.style.position = 'relative';
-    container.style.backdropFilter = 'blur(10px)';
 
     const nodeElements = {};
 
@@ -50,13 +49,15 @@ function initPipeline() {
         circle.style.height = '48px';
         circle.style.borderRadius = '50%';
         circle.style.background = statusColors['idle']; // default
-        circle.style.border = '4px solid var(--card-bg)';
+        circle.style.border = '3px solid #0a0a0d';
         circle.style.boxShadow = '0 0 10px rgba(0,0,0,0.3)';
         circle.style.display = 'flex';
         circle.style.alignItems = 'center';
         circle.style.justifyContent = 'center';
         circle.style.color = '#fff';
-        circle.style.fontWeight = 'bold';
+        circle.style.fontWeight = '900';
+        circle.style.fontSize = '0.8rem';
+        circle.style.letterSpacing = '0.05em';
         circle.style.transition = 'all 0.4s ease';
         
         // Add number inside
@@ -64,9 +65,11 @@ function initPipeline() {
 
         const label = document.createElement('div');
         label.textContent = node;
-        label.style.fontWeight = '500';
-        label.style.fontSize = '0.9rem';
-        label.style.color = 'var(--text-main)';
+        label.style.fontWeight = '600';
+        label.style.fontSize = '0.7rem';
+        label.style.color = 'rgba(255, 255, 255, 0.45)';
+        label.style.letterSpacing = '0.05em';
+        label.style.textTransform = 'uppercase';
 
         nodeInner.appendChild(circle);
         nodeInner.appendChild(label);
@@ -76,8 +79,8 @@ function initPipeline() {
         if (index < nodes.length - 1) {
             const arrowContainer = document.createElement('div');
             arrowContainer.style.flex = '1';
-            arrowContainer.style.height = '4px';
-            arrowContainer.style.background = 'rgba(255, 255, 255, 0.1)';
+            arrowContainer.style.height = '2px';
+            arrowContainer.style.background = 'rgba(255, 42, 42, 0.15)';
             arrowContainer.style.margin = '0 -10px 30px -10px';
             arrowContainer.style.position = 'relative';
             arrowContainer.style.zIndex = '1';
@@ -88,9 +91,9 @@ function initPipeline() {
             arrowHead.style.top = '-4px';
             arrowHead.style.width = '0'; 
             arrowHead.style.height = '0'; 
-            arrowHead.style.borderTop = '6px solid transparent';
-            arrowHead.style.borderBottom = '6px solid transparent';
-            arrowHead.style.borderLeft = '10px solid rgba(255, 255, 255, 0.1)';
+            arrowHead.style.borderTop = '5px solid transparent';
+            arrowHead.style.borderBottom = '5px solid transparent';
+            arrowHead.style.borderLeft = '8px solid rgba(255, 42, 42, 0.25)';
             
             arrowContainer.appendChild(arrowHead);
             nodeWrapper.appendChild(arrowContainer);

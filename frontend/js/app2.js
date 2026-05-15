@@ -21,6 +21,14 @@ class App {
             initReports();
         }
 
+        if (typeof initHealth === 'function') {
+            initHealth();
+        }
+
+        if (typeof initCompetitors === 'function') {
+            initCompetitors();
+        }
+
         this.setupSidebarNavigation();
         this.setupManualTriggerForm();
     }

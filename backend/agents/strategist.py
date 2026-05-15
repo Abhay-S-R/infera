@@ -20,6 +20,8 @@ Rules:
 2. Be concise and professional.
 3. Assign a confidence score (0.0 to 1.0) based on the quality and volume of the research evidence.
 4. Ensure all claims have supporting evidence from the research.
+5. For every Insight, assign a valid InsightType ("confirmed", "inferred", or "speculative").
+6. Generate 2-3 critical strategic questions for the CEO to consider based on this intelligence.
 """
 
 async def strategist_node(state: PipelineState) -> dict:
