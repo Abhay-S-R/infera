@@ -148,6 +148,7 @@ async def scout_node(state: PipelineState) -> dict:
             response_model=ResearchOutput,
             system=SYNTHESIS_SYSTEM_PROMPT,
             temperature=0.4,
+            max_output_tokens=8192,
         )
 
         # Override with actual data
