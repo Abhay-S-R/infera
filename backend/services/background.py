@@ -45,11 +45,17 @@ async def _complete_workflow(
     budget_stopped = _budget_stopped(result)
 
     if report_output:
+        combined_markdown = (
+            f"# Executive Brief\\n{report_output.exec_brief}\\n\\n"
+            f"# Technical Breakdown\\n{report_output.tech_brief}\\n\\n"
+            f"# Sales Battle Card\\n{report_output.sales_brief}\\n\\n"
+            f"# Risk Register\\n{report_output.risk_brief}"
+        )
         report = Report(
             workflow_id=workflow.id,
             title=report_output.title,
             status="published",
-            markdown=report_output.full_report_markdown,
+            markdown=combined_markdown,
             confidence=str(report_output.confidence_score),
             sources=report_output.sources,
         )
