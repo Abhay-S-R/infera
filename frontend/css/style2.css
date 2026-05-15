@@ -588,7 +588,65 @@ body {
     align-items: center;
 }
 
-.competitor-remove:hover {
-    color: #f87171;
-    background: rgba(248, 113, 113, 0.1);
+/* ─── Arbiter Rejection Alert ─── */
+@keyframes flash-red {
+    0% { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+    50% { background: rgba(239, 68, 68, 0.25); border-color: rgba(239, 68, 68, 0.8); box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    100% { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+}
+
+.activity-rejection-alert {
+    animation: flash-red 2s infinite;
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.25rem;
+    margin-bottom: 0.25rem;
+}
+
+.activity-rejection-alert .activity-body {
+    color: #fca5a5 !important;
+    font-weight: 500;
+}
+
+/* ─── Report Tabs (4-Doc UI) ─── */
+.report-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 0.5rem;
+    overflow-x: auto;
+}
+
+.report-tab {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.2s ease;
+}
+
+.report-tab:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.report-tab.active {
+    color: var(--accent-bright);
+    background: rgba(255, 42, 42, 0.08);
+    border-color: rgba(255, 42, 42, 0.3);
+}
+
+.report-tab-content {
+    animation: slideUp 0.3s ease forwards;
 }

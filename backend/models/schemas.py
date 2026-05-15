@@ -134,7 +134,6 @@ class ValidationResult(BaseModel):
 class ReportOutput(BaseModel):
     """Scribe agent's final report."""
     title: str
-    executive_summary: str
     exec_brief: str = Field(description="Markdown document tailored for the CEO/Executive team")
     tech_brief: str = Field(description="Markdown document tailored for Engineering/Product teams")
     sales_brief: str = Field(description="Markdown document tailored for Sales/GTM teams")
@@ -142,6 +141,31 @@ class ReportOutput(BaseModel):
     confidence_score: float = Field(ge=0, le=1)
     sources: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ReportListItem(BaseModel):
+    """Report summary for list endpoints."""
+    id: int
+    title: str
+    competitor: Optional[str] = None
+    confidence: float = 0.0
+    created_at: datetime
+
+
+class ReportDetailResponse(BaseModel):
+    """Full report with audience-specific documents."""
+    id: int
+    title: str
+    competitor: Optional[str] = None
+    confidence: float = 0.0
+    created_at: datetime
+    executive_summary: str = ""
+    full_report_markdown: str = ""
+    documents: dict[str, str] = Field(
+        default_factory=dict,
+        description='Keys: exec, tech, sales, risk',
+    )
+    sources: list[str] = Field(default_factory=list)
 
 
 # ─── Activity Events (for WebSocket feed) ───

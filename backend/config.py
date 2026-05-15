@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     OMIUM_ENDPOINT: str = "https://api.omium.dev"
     OMIUM_WORKSPACE: str = "ascent"
     SLACK_WEBHOOK_URL: Optional[str] = None
+    
+    # Delivery Integrations
+    LINEAR_API_KEY: Optional[str] = None
+    LINEAR_TEAM_ID: Optional[str] = None
+
+    # Delivery (Dev 3 — SendGrid CEO brief)
+    SENDGRID_API_KEY: Optional[str] = None
+    SENDGRID_FROM_EMAIL: Optional[str] = None
+    CEO_EMAIL: Optional[str] = None
 
     # App config
     DEMO_MODE: bool = False

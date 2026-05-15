@@ -50,6 +50,7 @@ class Report(Base):
     title = Column(String(500), nullable=False)
     status = Column(String(32), nullable=False, default="draft")
     markdown = Column(Text, nullable=True)
+    documents = Column(JSON, nullable=True)
     confidence = Column(String(16), nullable=True)
     sources = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

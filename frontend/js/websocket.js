@@ -1,7 +1,7 @@
 // frontend/js/websocket.js
 
 function initWebSocket() {
-    const wsUrl = 'ws://localhost:8000/ws/activity';
+    const wsUrl = 'ws://127.0.0.1:8000/ws/activity';
     let socket;
     
     function connect() {

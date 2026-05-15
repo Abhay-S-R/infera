@@ -13,6 +13,7 @@ from backend.agents.graph import get_checkpoint_next_agent, run_pipeline
 from backend.services.checkpointer import get_checkpointer
 from backend.services.events import publish_event
 from backend.services.budget import usage_from_pipeline_result
+from backend.services.delivery import deliver_report
 from backend.services.logger import get_logger
 
 logger = get_logger("dispatcher")
@@ -44,18 +45,29 @@ async def _complete_workflow(
     report_output = result.get("report_output")
     budget_stopped = _budget_stopped(result)
 
+    delivery_result: dict[str, object] | None = None
+    competitor_name: str | None = None
+    if isinstance(workflow.extra_data, dict):
+        competitor_name = workflow.extra_data.get("competitor_name")
+
     if report_output:
         combined_markdown = (
-            f"# Executive Brief\\n{report_output.exec_brief}\\n\\n"
-            f"# Technical Breakdown\\n{report_output.tech_brief}\\n\\n"
-            f"# Sales Battle Card\\n{report_output.sales_brief}\\n\\n"
-            f"# Risk Register\\n{report_output.risk_brief}"
+            f"# Executive Brief\n{report_output.exec_brief}\n\n"
+            f"# Technical Breakdown\n{report_output.tech_brief}\n\n"
+            f"# Sales Battle Card\n{report_output.sales_brief}\n\n"
+            f"# Risk Register\n{report_output.risk_brief}"
         )
         report = Report(
             workflow_id=workflow.id,
             title=report_output.title,
             status="published",
             markdown=combined_markdown,
+            documents={
+                "exec": report_output.exec_brief,
+                "tech": report_output.tech_brief,
+                "sales": report_output.sales_brief,
+                "risk": report_output.risk_brief,
+            },
             confidence=str(report_output.confidence_score),
             sources=report_output.sources,
         )
@@ -74,6 +86,20 @@ async def _complete_workflow(
     session.add(workflow)
     await session.commit()
 
+    if report_output:
+        try:
+            delivery_result = await deliver_report(
+                report_output,
+                workflow_id=workflow_id,
+                competitor=competitor_name,
+            )
+        except Exception as exc:
+            logger.warning(
+                "delivery_exception",
+                workflow_id=workflow_id,
+                error=str(exc)[:200],
+            )
+
     logger.info(
         "pipeline_completed",
         workflow_id=workflow_id,
@@ -89,14 +115,17 @@ async def _complete_workflow(
         else (f"Report generated: {report_output.title}" if report_output else "Pipeline completed")
     )
 
-    await publish_event("workflow.completed", {
+    completion_payload: dict[str, object] = {
         "workflow_id": workflow_id,
         "webhook_id": webhook_id,
         "status": completion_status,
         "message": completion_message,
         "tokens_used": workflow.tokens_used,
         "estimated_cost": workflow.estimated_cost,
-    })
+    }
+    if delivery_result:
+        completion_payload["delivery"] = delivery_result
+    await publish_event("workflow.completed", completion_payload)
 
 
 async def _fail_workflow(
