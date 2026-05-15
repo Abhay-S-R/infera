@@ -52,16 +52,17 @@ async def _complete_workflow(
 
     if report_output:
         documents = {
-            "exec": report_output.exec_markdown,
-            "tech": report_output.tech_markdown,
-            "sales": report_output.sales_markdown,
-            "risk": report_output.risk_markdown,
+            "exec": report_output.exec_brief,
+            "tech": report_output.tech_brief,
+            "sales": report_output.sales_brief,
+            "risk": report_output.risk_brief,
         }
         report = Report(
             workflow_id=workflow.id,
             title=report_output.title,
             status="published",
-            markdown=report_output.full_report_markdown,
+            markdown="",
+
             documents=documents,
             confidence=str(report_output.confidence_score),
             sources=report_output.sources,

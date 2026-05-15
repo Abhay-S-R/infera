@@ -134,11 +134,6 @@ class ValidationResult(BaseModel):
 class ReportOutput(BaseModel):
     """Scribe agent's final report."""
     title: str
-    executive_summary: str
-    exec_markdown: str = Field(description="CEO / executive audience brief (markdown)")
-    tech_markdown: str = Field(description="Engineering audience brief (markdown)")
-    sales_markdown: str = Field(description="Sales / GTM audience brief (markdown)")
-    risk_markdown: str = Field(description="Risk / compliance audience brief (markdown)")
     exec_brief: str = Field(description="Markdown document tailored for the CEO/Executive team")
     tech_brief: str = Field(description="Markdown document tailored for Engineering/Product teams")
     sales_brief: str = Field(description="Markdown document tailored for Sales/GTM teams")

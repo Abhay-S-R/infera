@@ -19,11 +19,9 @@ SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
 def _exec_body(report: ReportOutput) -> str:
-    if report.exec_markdown:
-        return report.exec_markdown
-    if report.executive_summary:
-        return report.executive_summary
-    return (report.full_report_markdown or "")[:8000]
+    if report.exec_brief:
+        return report.exec_brief
+    return ""
 
 
 async def deliver_report(

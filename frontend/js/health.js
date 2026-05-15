@@ -21,7 +21,7 @@ class HealthPanel {
 
     async fetchStats() {
         try {
-            const response = await fetch('http://localhost:8000/api/health/stats');
+            const response = await fetch('http://127.0.0.1:8000/api/health/stats');
             if (!response.ok) throw new Error('Health endpoint unavailable');
             const stats = await response.json();
             this.render(stats);

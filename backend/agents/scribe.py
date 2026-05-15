@@ -107,8 +107,6 @@ Please generate the 4 final targeted briefs based on this intelligence.
         # Ensure we attach the sources correctly
         report.sources = sources
         report.generated_at = datetime.now(timezone.utc)
-        if not report.full_report_markdown and report.exec_markdown:
-            report.full_report_markdown = report.exec_markdown
         
         log.info("scribe_completed", title=report.title)
         

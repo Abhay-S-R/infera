@@ -39,7 +39,7 @@ class ReportsManager {
         try {
             this.listContainer.innerHTML = '<div class="loading" style="color: var(--text-muted); padding: 2rem; text-align: center;">Loading reports...</div>';
 
-            const response = await fetch('http://localhost:8000/api/reports');
+            const response = await fetch('http://127.0.0.1:8000/api/reports');
             if (!response.ok) throw new Error('Failed to fetch reports');
 
             const reports = await response.json();
@@ -132,7 +132,7 @@ class ReportsManager {
             this.detailContainer.style.display = 'block';
             this.detailContainer.innerHTML = '<div class="loading" style="color: var(--text-muted); padding: 2rem; text-align: center;">Loading details...</div>';
 
-            const response = await fetch(`http://localhost:8000/api/reports/${id}`);
+            const response = await fetch(`http://127.0.0.1:8000/api/reports/${id}`);
             if (!response.ok) throw new Error('Failed to fetch report details');
 
             const report = await response.json();
