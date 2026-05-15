@@ -231,6 +231,7 @@ async def _generate_queries(
             prompt=prompt,
             system=QUERY_GENERATION_PROMPT.format(num_queries=num_queries),
             temperature=0.5,
+            model="llama-3.3-70b-versatile",
         )
         # Parse the JSON array from the response
         import json

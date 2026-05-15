@@ -80,7 +80,8 @@ Please generate the final structured report.
             prompt=prompt,
             response_model=ReportOutput,
             system=SYSTEM_PROMPT,
-            temperature=0.4 # Slightly higher temp for better writing flow
+            temperature=0.4, # Slightly higher temp for better writing flow
+            model="llama-3.3-70b-versatile",
         )
         
         # Ensure we attach the sources correctly

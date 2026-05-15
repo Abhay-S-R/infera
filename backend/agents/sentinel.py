@@ -86,6 +86,7 @@ async def sentinel_node(state: PipelineState) -> dict:
             response_model=SentinelOutput,
             system=SENTINEL_SYSTEM_PROMPT,
             temperature=0.3,  # Low temp for consistent classification
+            model="llama-3.3-70b-versatile",
         )
 
         wf_logger.info(
