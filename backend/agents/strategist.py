@@ -5,7 +5,7 @@ Dev 4 owns this file.
 from backend.services.logger import get_logger
 from backend.services.llm import generate_structured
 from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.context import summarize_for_next_agent, research_prompt_block
+from backend.services.context import prepare_for_strategist, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
 
@@ -39,9 +39,10 @@ async def strategist_node(state: PipelineState) -> dict:
         return stopped
 
     budget = get_budget(state)
-    ctx_state = await summarize_for_next_agent(state, "strategist", budget=budget)
-    research = ctx_state.get("research_output") or state.get("research_output")
+    ctx_state, research, estimated_tokens = await prepare_for_strategist(state, budget)
+    research = ctx_state.get("research_output") or research
     tier = budget.tier()
+    log.info("strategist_context_ready", estimated_state_tokens=estimated_tokens, tier=tier)
 
     # If there's no research output, we can't do much
     if not research or not research.key_findings:

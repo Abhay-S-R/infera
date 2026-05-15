@@ -26,7 +26,7 @@ from backend.agents.scribe import scribe_node
 from backend.agents.sentinel import sentinel_node
 from backend.agents.scout import scout_node
 from backend.agents.arbiter import arbiter_node
-
+from backend.services.budget import TokenBudget
 
 
 # ─── Routing Logic ───
@@ -61,14 +61,27 @@ def should_retry_or_proceed(state: PipelineState) -> str:
     return "scribe"     # Proceed to report generation
 
 
+def should_analyze_or_skip(state: PipelineState) -> str:
+    """After Scout: proceed to Strategist if research has data, else skip to Scribe."""
+    if _budget_stopped(state):
+        return "end"
+    research = state.get("research_output")
+    if research and research.sources_consulted > 0 and research.key_findings:
+        return "strategist"
+    # No sources found — skip analysis, let Scribe generate an "insufficient data" report
+    return "scribe"
+
+
 # ─── Graph Builder ───
 
-def build_graph() -> StateGraph:
+def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None):
     """
     Build and compile the ASCENT agent pipeline graph.
 
     Returns a compiled LangGraph that can be invoked with:
-        result = await graph.ainvoke(initial_state)
+        result = await graph.ainvoke(initial_state, config={"configurable": {"thread_id": workflow_id}})
+
+    interrupt_before: optional node names to pause before (used for crash-recovery tests).
     """
     builder = StateGraph(PipelineState)
 
@@ -92,8 +105,16 @@ def build_graph() -> StateGraph:
         },
     )
 
-    # Scout → Strategist (always)
-    builder.add_edge("scout", "strategist")
+    # Scout → conditional: analyze if we have data, else skip to report
+    builder.add_conditional_edges(
+        "scout",
+        should_analyze_or_skip,
+        {
+            "strategist": "strategist",  # Has research data
+            "scribe": "scribe",          # No sources → "insufficient data" report
+            "end": END,
+        },
+    )
 
     # Strategist → Arbiter (always)
     builder.add_edge("strategist", "arbiter")
@@ -112,18 +133,48 @@ def build_graph() -> StateGraph:
     # Scribe → END
     builder.add_edge("scribe", END)
 
-    return builder.compile()
+    compile_kwargs: dict = {"checkpointer": checkpointer}
+    if interrupt_before:
+        compile_kwargs["interrupt_before"] = interrupt_before
+    return builder.compile(**compile_kwargs)
+
+
+def pipeline_config(workflow_id: str) -> dict:
+    """LangGraph config for checkpointing — thread_id maps to workflow id."""
+    return {"configurable": {"thread_id": workflow_id}}
+
+
+async def get_checkpoint_next_agent(workflow_id: str, checkpointer) -> str | None:
+    """Return the next agent node from the LangGraph checkpoint (for resume UX/logging)."""
+    graph = build_graph(checkpointer=checkpointer)
+    snapshot = await graph.aget_state(pipeline_config(workflow_id))
+    if snapshot and snapshot.next:
+        node = snapshot.next[0]
+        if isinstance(node, str):
+            return node
+        return str(node)
+    return None
 
 
 # ─── Convenience runner ───
 
-async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> PipelineState:
+async def run_pipeline(
+    signal: SignalInput | None = None,
+    workflow_id: str | None = None,
+    checkpointer=None,
+    *,
+    resume: bool = False,
+    initial_state: PipelineState | None = None,
+) -> PipelineState:
     """
     Run the full ASCENT pipeline for a given signal.
 
     Args:
-        signal: The incoming signal to process
-        workflow_id: Optional workflow ID (auto-generated if not provided)
+        signal: The incoming signal to process (not required when resume=True)
+        workflow_id: Workflow / checkpoint thread id (auto-generated if not provided)
+        checkpointer: LangGraph PostgresSaver for crash recovery
+        resume: If True, continue from the last checkpointed agent
+        initial_state: Optional dict to override default starting state (for testing)
 
     Returns:
         Final PipelineState with all agent outputs
@@ -131,11 +182,19 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
     if workflow_id is None:
         workflow_id = str(uuid.uuid4())
 
-    graph = build_graph()
+    graph = build_graph(checkpointer=checkpointer)
+    config = pipeline_config(workflow_id)
+
+    if resume:
+        result = await graph.ainvoke(None, config=config)
+        return result
+
+    if signal is None and not (initial_state and "signal" in initial_state):
+        raise ValueError("signal is required when resume=False")
 
     budget = TokenBudget()
-    initial_state: PipelineState = {
-        "signal": signal,
+    default_state: PipelineState = {
+        "signal": signal,  # type: ignore[typeddict-item]
         "workflow_id": workflow_id,
         "retry_count": 0,
         "max_retries": 3,
@@ -148,6 +207,11 @@ async def run_pipeline(signal: SignalInput, workflow_id: str | None = None) -> P
         "total_cost_usd": 0.0,
         "budget_exceeded": False,
     }
+    
+    # Merge initial_state into defaults
+    final_initial_state = default_state.copy()
+    if initial_state:
+        final_initial_state.update(initial_state)
 
-    result = await graph.ainvoke(initial_state)
+    result = await graph.ainvoke(final_initial_state, config=config)
     return result

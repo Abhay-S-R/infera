@@ -212,6 +212,7 @@ async def scout_node(state: PipelineState) -> dict:
                 raw_content_summary=f"LLM synthesis failed. Raw results from {len(all_results)} sources available.",
             ),
             "current_agent": "scout",
+            **budget.state_updates(),
             "error": f"Scout synthesis error: {str(e)}",
             "activity_log": [ActivityEvent(
                 agent="scout",

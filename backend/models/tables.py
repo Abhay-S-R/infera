@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, Float, func
+from sqlalchemy import Boolean, Column, Integer, String, Text, JSON, DateTime, Float, func
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -29,6 +29,17 @@ class Workflow(Base):
     estimated_cost = Column(Float, nullable=True, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class Competitor(Base):
+    __tablename__ = "competitors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(256), nullable=False)
+    industry = Column(String(256), nullable=True)
+    keywords = Column(JSON, nullable=False, default=list)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class Report(Base):

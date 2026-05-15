@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db"
-    DATABASE_URL_SYNC: str = "postgresql://ascent:ascent_pass@localhost:5433/ascent_db"
+    DATABASE_URL: str = "postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db"
+    DATABASE_URL_SYNC: str = "postgresql://ascent:ascent_pass@localhost:5432/ascent_db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Optional integrations
@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     FRONTEND_URL: str = "http://localhost:3000"
+
+    # Scheduling (Dev 1)
+    SCHEDULER_ENABLED: bool = True
+    SCHEDULER_INTERVAL_MINUTES: int = 5
 
     model_config = SettingsConfigDict(
         env_file=str(_ENV_FILE) if _ENV_FILE.is_file() else ".env",

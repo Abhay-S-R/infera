@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from backend.api.deps import require_database
 from backend.models.database import AsyncSessionLocal
 from backend.models.schemas import ReportOutput
 from backend.models.tables import Report
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", dependencies=[Depends(require_database)])
 
 
 async def get_session() -> AsyncSession:

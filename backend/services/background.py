@@ -4,14 +4,219 @@ ASCENT Background Pipeline Dispatcher.
 Called by webhook/analyze endpoints as a FastAPI BackgroundTask.
 Runs the full LangGraph agent pipeline and saves results to the database.
 """
+from sqlalchemy import select
+
 from backend.models.database import AsyncSessionLocal
 from backend.models.tables import Workflow, Report
 from backend.models.schemas import SignalInput
-from backend.agents.graph import run_pipeline
+from backend.agents.graph import get_checkpoint_next_agent, run_pipeline
+from backend.services.checkpointer import get_checkpointer
 from backend.services.events import publish_event
+from backend.services.budget import usage_from_pipeline_result
 from backend.services.logger import get_logger
 
 logger = get_logger("dispatcher")
+
+
+def _format_pipeline_error(error: Exception) -> str:
+    """Human-readable error for DB/logs (some exceptions have an empty str())."""
+    msg = str(error).strip()
+    if msg:
+        return msg[:500]
+    return f"{type(error).__name__}: {error!r}"[:500]
+
+
+def _budget_stopped(result: dict) -> bool:
+    if result.get("budget_exceeded"):
+        return True
+    err = result.get("error") or ""
+    return "budget exceeded" in err.lower()
+
+
+async def _complete_workflow(
+    session,
+    workflow: Workflow,
+    result: dict,
+    workflow_id: str,
+    webhook_id: int,
+) -> None:
+    """Persist report, token usage, and mark workflow completed."""
+    report_output = result.get("report_output")
+    budget_stopped = _budget_stopped(result)
+
+    if report_output:
+        report = Report(
+            workflow_id=workflow.id,
+            title=report_output.title,
+            status="published",
+            markdown=report_output.full_report_markdown,
+            confidence=str(report_output.confidence_score),
+            sources=report_output.sources,
+        )
+        session.add(report)
+
+    workflow.status = "budget_exceeded" if budget_stopped else "completed"
+    workflow.current_agent = "done"
+    tokens, cost = usage_from_pipeline_result(result)
+    workflow.tokens_used = tokens
+    workflow.estimated_cost = cost
+    if budget_stopped:
+        workflow.extra_data = {
+            **(workflow.extra_data or {}),
+            "budget_error": result.get("error"),
+        }
+    session.add(workflow)
+    await session.commit()
+
+    logger.info(
+        "pipeline_completed",
+        workflow_id=workflow_id,
+        report_title=report_output.title if report_output else "No report",
+        tokens_used=workflow.tokens_used,
+        estimated_cost=workflow.estimated_cost,
+    )
+
+    completion_status = "budget_exceeded" if budget_stopped else "completed"
+    completion_message = (
+        result.get("error", "Token budget exceeded")
+        if budget_stopped
+        else (f"Report generated: {report_output.title}" if report_output else "Pipeline completed")
+    )
+
+    await publish_event("workflow.completed", {
+        "workflow_id": workflow_id,
+        "webhook_id": webhook_id,
+        "status": completion_status,
+        "message": completion_message,
+        "tokens_used": workflow.tokens_used,
+        "estimated_cost": workflow.estimated_cost,
+    })
+
+
+async def _fail_workflow(
+    session,
+    workflow: Workflow,
+    workflow_id: str,
+    webhook_id: int,
+    error: Exception,
+    result: dict | None = None,
+) -> None:
+    err_msg = _format_pipeline_error(error)
+    logger.error("pipeline_failed", workflow_id=workflow_id, error=err_msg, error_type=type(error).__name__)
+
+    workflow.status = "failed"
+    workflow.extra_data = {**(workflow.extra_data or {}), "error": err_msg}
+    if result:
+        workflow.tokens_used = result.get("total_tokens_used", 0) or workflow.tokens_used or 0
+        workflow.estimated_cost = result.get("total_cost_usd", 0.0) or workflow.estimated_cost or 0.0
+    session.add(workflow)
+    await session.commit()
+
+    await publish_event("workflow.failed", {
+        "workflow_id": workflow_id,
+        "webhook_id": webhook_id,
+        "status": "failed",
+        "message": f"Pipeline failed: {str(error)[:200]}",
+    })
+
+
+async def _execute_pipeline(
+    workflow_id: int,
+    webhook_id: int,
+    payload: dict[str, object],
+    *,
+    resume: bool = False,
+) -> None:
+    """Run or resume the LangGraph pipeline for an existing workflow row."""
+    wf_id_str = str(workflow_id)
+    checkpointer = await get_checkpointer()
+
+    async with AsyncSessionLocal() as session:
+        workflow = await session.get(Workflow, workflow_id)
+        if workflow is None:
+            logger.error("workflow_not_found", workflow_id=workflow_id)
+            return
+
+        if not resume:
+            await publish_event("workflow.started", {
+                "workflow_id": wf_id_str,
+                "webhook_id": webhook_id,
+                "current_agent": workflow.current_agent or "sentinel",
+                "message": "Pipeline started",
+            })
+            logger.info("pipeline_started", workflow_id=wf_id_str, webhook_id=webhook_id)
+        else:
+            next_agent = await get_checkpoint_next_agent(wf_id_str, checkpointer)
+            if next_agent:
+                workflow.current_agent = next_agent
+                session.add(workflow)
+                await session.commit()
+
+            await publish_event("workflow.resumed", {
+                "workflow_id": wf_id_str,
+                "webhook_id": webhook_id,
+                "current_agent": workflow.current_agent,
+                "message": f"Resuming pipeline from {workflow.current_agent}",
+            })
+            logger.info(
+                "pipeline_resumed",
+                workflow_id=wf_id_str,
+                webhook_id=webhook_id,
+                resume_from=workflow.current_agent,
+            )
+
+        try:
+            if resume:
+                result = await run_pipeline(
+                    workflow_id=wf_id_str,
+                    checkpointer=checkpointer,
+                    resume=True,
+                )
+            else:
+                signal = SignalInput(**payload)
+                result = await run_pipeline(
+                    signal,
+                    workflow_id=wf_id_str,
+                    checkpointer=checkpointer,
+                )
+
+            await _complete_workflow(session, workflow, result, wf_id_str, webhook_id)
+
+        except Exception as e:
+            partial: dict = {}
+            try:
+                partial = {
+                    "total_tokens_used": workflow.tokens_used or 0,
+                    "total_cost_usd": workflow.estimated_cost or 0.0,
+                }
+            except Exception:
+                pass
+            await _fail_workflow(session, workflow, wf_id_str, webhook_id, e, result=partial)
+
+
+async def enqueue_pipeline_run(signal: SignalInput, *, source: str = "scheduled") -> dict[str, int]:
+    """
+    Create webhook + workflow records and start the pipeline.
+
+    Used by APScheduler and POST /webhooks/scheduled.
+    """
+    payload = signal.model_dump(exclude_none=True)
+    async with AsyncSessionLocal() as session:
+        from backend.models.tables import WebhookEvent
+
+        webhook = WebhookEvent(
+            source=source,
+            title=signal.title,
+            url=signal.url,
+            payload=payload,
+        )
+        session.add(webhook)
+        await session.commit()
+        await session.refresh(webhook)
+        webhook_id = webhook.id
+
+    await dispatch_pipeline(webhook_id, payload)
+    return {"webhook_id": webhook_id}
 
 
 async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None:
@@ -24,7 +229,6 @@ async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None
     4. Update the Workflow record (status=completed or failed)
     """
     async with AsyncSessionLocal() as session:
-        # ─── Create workflow record ───
         workflow = Workflow(
             webhook_id=webhook_id,
             status="running",
@@ -34,93 +238,26 @@ async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None
         session.add(workflow)
         await session.commit()
         await session.refresh(workflow)
+        workflow_id = workflow.id
 
-        workflow_id = str(workflow.id)
+    await _execute_pipeline(workflow_id, webhook_id, payload, resume=False)
 
-        await publish_event("workflow.started", {
-            "workflow_id": workflow_id,
-            "webhook_id": webhook_id,
-            "current_agent": "sentinel",
-            "message": "Pipeline started",
-        })
 
-        logger.info("pipeline_started", workflow_id=workflow_id, webhook_id=webhook_id)
+async def resume_interrupted_workflows() -> None:
+    """On startup, resume any workflows that were still running when the process died."""
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Workflow).where(Workflow.status == "running")
+        )
+        interrupted = result.scalars().all()
 
-        try:
-            # ─── Build SignalInput from webhook payload ───
-            signal = SignalInput(**payload)
+    if not interrupted:
+        logger.info("no_interrupted_workflows")
+        return
 
-            # ─── Run the real agent pipeline ───
-            result = await run_pipeline(signal, workflow_id=workflow_id)
+    logger.info("resuming_interrupted_workflows", count=len(interrupted))
 
-            # ─── Save report to DB ───
-            report_output = result.get("report_output")
-            budget_stopped = result.get("budget_exceeded") or (
-                result.get("error") and "budget exceeded" in (result.get("error") or "").lower()
-            )
-            if report_output:
-                report = Report(
-                    workflow_id=workflow.id,
-                    title=report_output.title,
-                    status="published",
-                    markdown=report_output.full_report_markdown,
-                    confidence=str(report_output.confidence_score),
-                    sources=report_output.sources,
-                )
-                session.add(report)
-
-            # ─── Update workflow as completed ───
-            workflow.status = "completed"
-            workflow.current_agent = "done"
-            workflow.tokens_used = result.get("total_tokens_used", 0) or 0
-            workflow.estimated_cost = result.get("total_cost_usd", 0.0) or 0.0
-            if result.get("budget_exceeded") or (
-                result.get("error") and "budget exceeded" in (result.get("error") or "").lower()
-            ):
-                workflow.status = "budget_exceeded"
-                workflow.extra_data = {
-                    **(workflow.extra_data or {}),
-                    "budget_error": result.get("error"),
-                }
-            session.add(workflow)
-            await session.commit()
-
-            logger.info(
-                "pipeline_completed",
-                workflow_id=workflow_id,
-                report_title=report_output.title if report_output else "No report",
-                tokens_used=workflow.tokens_used,
-                estimated_cost=workflow.estimated_cost,
-            )
-
-            completion_status = "budget_exceeded" if budget_stopped else "completed"
-            completion_message = (
-                result.get("error", "Token budget exceeded")
-                if budget_stopped
-                else (f"Report generated: {report_output.title}" if report_output else "Pipeline completed")
-            )
-
-            await publish_event("workflow.completed", {
-                "workflow_id": workflow_id,
-                "webhook_id": webhook_id,
-                "status": completion_status,
-                "message": completion_message,
-                "tokens_used": workflow.tokens_used,
-                "estimated_cost": workflow.estimated_cost,
-            })
-
-        except Exception as e:
-            # ─── Handle pipeline failure ───
-            logger.error("pipeline_failed", workflow_id=workflow_id, error=str(e))
-
-            workflow.status = "failed"
-            workflow.extra_data = {**(workflow.extra_data or {}), "error": str(e)[:500]}
-            session.add(workflow)
-            await session.commit()
-
-            await publish_event("workflow.failed", {
-                "workflow_id": workflow_id,
-                "webhook_id": webhook_id,
-                "status": "failed",
-                "message": f"Pipeline failed: {str(e)[:200]}",
-            })
+    for workflow in interrupted:
+        payload = workflow.extra_data if isinstance(workflow.extra_data, dict) else {}
+        webhook_id = workflow.webhook_id or 0
+        await _execute_pipeline(workflow.id, webhook_id, payload, resume=True)
