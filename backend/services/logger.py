@@ -167,6 +167,11 @@ def _setup_root_logger() -> None:
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
+def configure_logging() -> None:
+    """Public entry point to initialize logging. Called by main.py on startup."""
+    _setup_root_logger()
+
+
 def get_logger(name: str) -> StructuredLogger:
     """
     Get a structured logger for the given module/agent name.
