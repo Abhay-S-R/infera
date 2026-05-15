@@ -5,22 +5,24 @@ All agents call this module for LLM inference.
 It dynamically routes to Groq (for speed) or Gemini (for complex reasoning) based on the model name.
 
 Usage:
-    from backend.services.llm import generate, generate_structured
+    from backend.services.llm import generate, generate_structured, LLMUsage
 
-    # Groq text generation
-    text = await generate("Summarize...", model="llama-3.3-70b-versatile")
+    text, usage = await generate("Summarize...", model="llama-3.3-70b-versatile")
 
-    # Gemini structured output
-    result = await generate_structured(
+    result, usage = await generate_structured(
         prompt="Analyze this signal...",
         response_model=AnalysisOutput,
-        model="gemini-3.1-flash-lite"
+        model="gemini-3.1-flash-lite",
+        budget=budget,
+        agent="strategist",
     )
 """
+from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Optional, TypeVar, Type
+from dataclasses import dataclass
+from typing import Optional, TypeVar, Type, TYPE_CHECKING
 
 from google import genai
 from google.genai import types
@@ -28,25 +30,50 @@ from groq import AsyncGroq
 from pydantic import BaseModel
 
 from backend.config import settings
+from backend.services.budget import BudgetExceededError
 from backend.services.logger import get_logger
+
+if TYPE_CHECKING:
+    from backend.services.budget import TokenBudget
 
 logger = get_logger("llm")
 
-# ─── Type var for structured output generics ───
 T = TypeVar("T", bound=BaseModel)
 
-# ─── Client singletons ───
 _gemini_client: Optional[genai.Client] = None
 _groq_client: Optional[AsyncGroq] = None
 
-# ─── Model configuration ───
 DEFAULT_MODEL = "gemini-3.1-flash-lite"
 MAX_RETRIES = 3
-BASE_RETRY_DELAY = 1.0  # seconds
+BASE_RETRY_DELAY = 1.0
+
+
+@dataclass
+class LLMUsage:
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    estimated_cost_usd: float = 0.0
+
+    @classmethod
+    def from_counts(
+        cls,
+        prompt_tokens: Optional[int],
+        completion_tokens: Optional[int],
+    ) -> LLMUsage:
+        p = prompt_tokens or 0
+        c = completion_tokens or 0
+        total = p + c
+        cost = (total / 1000.0) * 0.0004
+        return cls(
+            prompt_tokens=p,
+            completion_tokens=c,
+            total_tokens=total,
+            estimated_cost_usd=cost,
+        )
 
 
 def _get_gemini_client() -> genai.Client:
-    """Lazy-initialize the Gemini client."""
     global _gemini_client
     if _gemini_client is None:
         if not settings.GEMINI_API_KEY:
@@ -57,7 +84,6 @@ def _get_gemini_client() -> genai.Client:
 
 
 def _get_groq_client() -> AsyncGroq:
-    """Lazy-initialize the Groq client."""
     global _groq_client
     if _groq_client is None:
         if not settings.GROQ_API_KEY:
@@ -71,6 +97,26 @@ def _is_groq_model(model: str) -> bool:
     return model.startswith("llama") or model.startswith("mixtral") or model.startswith("gemma")
 
 
+def _check_budget_before_call(budget: Optional["TokenBudget"], agent: Optional[str]) -> None:
+    if budget is None:
+        return
+    if budget.is_exceeded():
+        raise BudgetExceededError(
+            f"Budget exceeded before {agent or 'llm'} call "
+            f"({budget.tokens_used:,}/{budget.max_tokens:,} tokens)"
+        )
+
+
+def _apply_usage_to_budget(
+    budget: Optional["TokenBudget"],
+    agent: Optional[str],
+    usage: LLMUsage,
+) -> None:
+    if budget is None or usage.total_tokens <= 0:
+        return
+    budget.track(agent or "llm", usage.total_tokens, usage.estimated_cost_usd)
+
+
 async def generate(
     prompt: str,
     *,
@@ -78,9 +124,12 @@ async def generate(
     model: str = DEFAULT_MODEL,
     temperature: float = 0.7,
     max_output_tokens: int = 4096,
-) -> str:
-    """Generate plain text using either Groq or Gemini."""
-    
+    budget: Optional["TokenBudget"] = None,
+    agent: Optional[str] = None,
+) -> tuple[str, LLMUsage]:
+    """Generate plain text; returns (text, usage)."""
+    _check_budget_before_call(budget, agent)
+
     last_error: Optional[Exception] = None
 
     for attempt in range(1, MAX_RETRIES + 1):
@@ -92,7 +141,7 @@ async def generate(
                 if system:
                     messages.append({"role": "system", "content": system})
                 messages.append({"role": "user", "content": prompt})
-                
+
                 response = await client.chat.completions.create(
                     model=model,
                     messages=messages,
@@ -100,10 +149,10 @@ async def generate(
                     max_completion_tokens=max_output_tokens,
                 )
                 text = response.choices[0].message.content or ""
-                usage = {
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                }
+                usage = LLMUsage.from_counts(
+                    response.usage.prompt_tokens if response.usage else None,
+                    response.usage.completion_tokens if response.usage else None,
+                )
             else:
                 client = _get_gemini_client()
                 config = types.GenerateContentConfig(
@@ -112,33 +161,44 @@ async def generate(
                 )
                 if system:
                     config.system_instruction = system
-                
+
                 response = await client.aio.models.generate_content(
                     model=model,
                     contents=prompt,
                     config=config,
                 )
                 text = response.text or ""
-                usage = _extract_gemini_usage(response)
+                raw = _extract_gemini_usage(response)
+                usage = LLMUsage.from_counts(
+                    raw.get("prompt_tokens"),
+                    raw.get("completion_tokens"),
+                )
+
+            _apply_usage_to_budget(budget, agent, usage)
 
             elapsed = time.monotonic() - start
             logger.info(
                 "llm_generate_success",
                 model=model,
+                agent=agent,
                 attempt=attempt,
                 elapsed_s=round(elapsed, 3),
-                prompt_tokens=usage.get("prompt_tokens"),
-                completion_tokens=usage.get("completion_tokens"),
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
                 char_count=len(text),
             )
-            return text
+            return text, usage
 
+        except BudgetExceededError:
+            raise
         except Exception as e:
             last_error = e
             elapsed = time.monotonic() - start
             logger.warning(
                 "llm_generate_retry",
                 model=model,
+                agent=agent,
                 attempt=attempt,
                 elapsed_s=round(elapsed, 3),
                 error=str(e),
@@ -147,7 +207,7 @@ async def generate(
                 delay = BASE_RETRY_DELAY * (2 ** (attempt - 1))
                 await asyncio.sleep(delay)
 
-    logger.error("llm_generate_failed", model=model, error=str(last_error))
+    logger.error("llm_generate_failed", model=model, agent=agent, error=str(last_error))
     raise RuntimeError(f"LLM generation failed after {MAX_RETRIES} retries: {last_error}")
 
 
@@ -159,9 +219,12 @@ async def generate_structured(
     model: str = DEFAULT_MODEL,
     temperature: float = 0.4,
     max_output_tokens: int = 4096,
-) -> T:
-    """Generate structured Pydantic response using either Groq or Gemini."""
-    
+    budget: Optional["TokenBudget"] = None,
+    agent: Optional[str] = None,
+) -> tuple[T, LLMUsage]:
+    """Generate structured Pydantic response; returns (result, usage)."""
+    _check_budget_before_call(budget, agent)
+
     last_error: Optional[Exception] = None
 
     for attempt in range(1, MAX_RETRIES + 1):
@@ -169,35 +232,33 @@ async def generate_structured(
         try:
             if _is_groq_model(model):
                 client = _get_groq_client()
-                
-                # Append instruction to output JSON matching the schema
-                json_system = f"You must output valid JSON matching this schema:\n{json.dumps(response_model.model_json_schema())}"
-                if system:
-                    system_content = f"{system}\n\n{json_system}"
-                else:
-                    system_content = json_system
-                    
+
+                json_system = (
+                    f"You must output valid JSON matching this schema:\n"
+                    f"{json.dumps(response_model.model_json_schema())}"
+                )
+                system_content = f"{system}\n\n{json_system}" if system else json_system
+
                 messages = [
                     {"role": "system", "content": system_content},
-                    {"role": "user", "content": prompt}
+                    {"role": "user", "content": prompt},
                 ]
-                
+
                 response = await client.chat.completions.create(
                     model=model,
                     messages=messages,
                     temperature=temperature,
                     max_completion_tokens=max_output_tokens,
-                    response_format={"type": "json_object"}
+                    response_format={"type": "json_object"},
                 )
-                
+
                 raw_text = response.choices[0].message.content or "{}"
                 result = response_model.model_validate_json(raw_text)
-                
-                usage = {
-                    "prompt_tokens": response.usage.prompt_tokens if response.usage else None,
-                    "completion_tokens": response.usage.completion_tokens if response.usage else None,
-                }
-                
+                usage = LLMUsage.from_counts(
+                    response.usage.prompt_tokens if response.usage else None,
+                    response.usage.completion_tokens if response.usage else None,
+                )
+
             else:
                 client = _get_gemini_client()
                 config = types.GenerateContentConfig(
@@ -208,34 +269,44 @@ async def generate_structured(
                 )
                 if system:
                     config.system_instruction = system
-                
+
                 response = await client.aio.models.generate_content(
                     model=model,
                     contents=prompt,
                     config=config,
                 )
-                
+
                 if hasattr(response, "parsed") and response.parsed is not None:
                     result = response.parsed
                 else:
                     raw_text = response.text or "{}"
                     data = json.loads(raw_text)
                     result = response_model.model_validate(data)
-                    
-                usage = _extract_gemini_usage(response)
+
+                raw = _extract_gemini_usage(response)
+                usage = LLMUsage.from_counts(
+                    raw.get("prompt_tokens"),
+                    raw.get("completion_tokens"),
+                )
+
+            _apply_usage_to_budget(budget, agent, usage)
 
             elapsed = time.monotonic() - start
             logger.info(
                 "llm_structured_success",
                 model=model,
                 schema=response_model.__name__,
+                agent=agent,
                 attempt=attempt,
                 elapsed_s=round(elapsed, 3),
-                prompt_tokens=usage.get("prompt_tokens"),
-                completion_tokens=usage.get("completion_tokens"),
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                total_tokens=usage.total_tokens,
             )
-            return result
+            return result, usage
 
+        except BudgetExceededError:
+            raise
         except Exception as e:
             last_error = e
             elapsed = time.monotonic() - start
@@ -243,6 +314,7 @@ async def generate_structured(
                 "llm_structured_retry",
                 model=model,
                 schema=response_model.__name__,
+                agent=agent,
                 attempt=attempt,
                 elapsed_s=round(elapsed, 3),
                 error=str(e),
@@ -251,12 +323,17 @@ async def generate_structured(
                 delay = BASE_RETRY_DELAY * (2 ** (attempt - 1))
                 await asyncio.sleep(delay)
 
-    logger.error("llm_structured_failed", model=model, schema=response_model.__name__, error=str(last_error))
+    logger.error(
+        "llm_structured_failed",
+        model=model,
+        schema=response_model.__name__,
+        agent=agent,
+        error=str(last_error),
+    )
     raise RuntimeError(f"Structured LLM generation failed after {MAX_RETRIES} retries: {last_error}")
 
 
 def _extract_gemini_usage(response) -> dict:
-    """Extract token usage from Gemini response, safely."""
     usage = {}
     try:
         if hasattr(response, "usage_metadata") and response.usage_metadata:
