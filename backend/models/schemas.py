@@ -21,6 +21,12 @@ class EventType(str, Enum):
     GENERAL = "general"
 
 
+class InsightType(str, Enum):
+    CONFIRMED = "confirmed"
+    INFERRED = "inferred"
+    SPECULATIVE = "speculative"
+
+
 class AgentStatus(str, Enum):
     IDLE = "idle"
     RUNNING = "running"
@@ -73,12 +79,19 @@ class ResearchOutput(BaseModel):
     raw_content_summary: str = Field(description="Synthesized summary of all gathered content")
 
 
+class CoverageEvaluation(BaseModel):
+    """Evaluation of whether the current research covers the strategic agenda."""
+    missing_questions: list[str] = Field(description="Questions not fully answered by current findings")
+    confidence: float = Field(ge=0, le=1, description="Confidence that we have enough information")
+
+
 # ─── Strategist Output ───
 
 class CompetitiveInsight(BaseModel):
     """A single competitive insight with evidence."""
     insight: str
     impact: str = Field(description="High/Medium/Low")
+    type: InsightType = Field(description="Categorization of insight validity")
     evidence: list[str] = Field(description="Supporting evidence from research")
     confidence: float = Field(ge=0, le=1)
 
@@ -90,6 +103,7 @@ class AnalysisOutput(BaseModel):
     competitive_positioning: str = Field(description="How this affects competitive landscape")
     insights: list[CompetitiveInsight] = Field(default_factory=list)
     strategic_recommendations: list[str] = Field(description="Actionable recommendations")
+    ceo_questions: list[str] = Field(default_factory=list, description="Critical strategic questions for the CEO to consider")
     overall_confidence: float = Field(ge=0, le=1, description="Overall confidence in analysis")
 
 
@@ -120,7 +134,10 @@ class ReportOutput(BaseModel):
     """Scribe agent's final report."""
     title: str
     executive_summary: str
-    full_report_markdown: str = Field(description="Complete report in markdown format")
+    exec_brief: str = Field(description="Markdown document tailored for the CEO/Executive team")
+    tech_brief: str = Field(description="Markdown document tailored for Engineering/Product teams")
+    sales_brief: str = Field(description="Markdown document tailored for Sales/GTM teams")
+    risk_brief: str = Field(description="Markdown document tailored for Legal/Risk teams")
     confidence_score: float = Field(ge=0, le=1)
     sources: list[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=datetime.utcnow)
