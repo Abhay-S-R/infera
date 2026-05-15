@@ -13,8 +13,6 @@ from langgraph.graph import StateGraph, END
 from backend.agents.state import PipelineState
 from backend.models.schemas import (
     SignalInput,
-    SentinelOutput,
-    ResearchOutput,
     AnalysisOutput,
     ValidationResult,
     ReportOutput,
@@ -23,84 +21,11 @@ from backend.models.schemas import (
 )
 
 
-# ─── Stub Agent Nodes (will be replaced with real implementations in Phase 1) ───
+from backend.agents.strategist import strategist_node
+from backend.agents.scribe import scribe_node
+from backend.agents.sentinel import sentinel_node
+from backend.agents.scout import scout_node
 
-async def sentinel_node(state: PipelineState) -> dict:
-    """
-    Monitor agent — filters and classifies incoming signals.
-    Stub: passes everything through with high relevance.
-    """
-    signal = state.get("signal")
-    print(f"[Sentinel] Processing signal: {signal.title if signal else 'None'}")
-
-    return {
-        "sentinel_output": SentinelOutput(
-            relevance_score=0.9,
-            should_investigate=True,
-            event_type="general",
-            entities=[],
-            summary=signal.title if signal else "No signal",
-            reasoning="Stub: auto-approved for development",
-        ),
-        "current_agent": "sentinel",
-        "activity_log": [ActivityEvent(
-            agent="sentinel",
-            status=AgentStatus.DONE,
-            message="Signal classified",
-            detail=f"Relevance: 0.9 (stub)",
-        )],
-    }
-
-
-async def scout_node(state: PipelineState) -> dict:
-    """
-    Research agent — searches the web and gathers evidence.
-    Stub: returns empty research output.
-    """
-    print("[Scout] Researching...")
-
-    return {
-        "research_output": ResearchOutput(
-            queries_used=["stub query"],
-            results=[],
-            key_findings=["Stub: no real research performed yet"],
-            sources_consulted=0,
-            raw_content_summary="Stub research output — will be replaced with real Tavily searches.",
-        ),
-        "current_agent": "scout",
-        "activity_log": [ActivityEvent(
-            agent="scout",
-            status=AgentStatus.DONE,
-            message="Research complete",
-            detail="Stub: 0 sources consulted",
-        )],
-    }
-
-
-async def strategist_node(state: PipelineState) -> dict:
-    """
-    Analysis agent — synthesizes research into competitive analysis.
-    Stub: returns placeholder analysis.
-    """
-    print("[Strategist] Analyzing...")
-
-    return {
-        "analysis_output": AnalysisOutput(
-            executive_summary="Stub analysis — will be replaced with real LLM reasoning.",
-            market_impact="Stub: unknown impact",
-            competitive_positioning="Stub: unknown positioning",
-            insights=[],
-            strategic_recommendations=["Stub: implement real analysis"],
-            overall_confidence=0.5,
-        ),
-        "current_agent": "strategist",
-        "activity_log": [ActivityEvent(
-            agent="strategist",
-            status=AgentStatus.DONE,
-            message="Analysis complete",
-            detail="Stub: placeholder analysis",
-        )],
-    }
 
 
 async def arbiter_node(state: PipelineState) -> dict:
@@ -128,31 +53,6 @@ async def arbiter_node(state: PipelineState) -> dict:
         )],
     }
 
-
-async def scribe_node(state: PipelineState) -> dict:
-    """
-    Report agent — generates the final deliverable.
-    Stub: returns a placeholder report.
-    """
-    signal = state.get("signal")
-    print("[Scribe] Generating report...")
-
-    return {
-        "report_output": ReportOutput(
-            title=f"Intelligence Report: {signal.title if signal else 'Unknown'}",
-            executive_summary="Stub report — pipeline is wired correctly.",
-            full_report_markdown="# Stub Report\n\nThe pipeline ran end-to-end. Replace stubs with real agents.",
-            confidence_score=0.5,
-            sources=[],
-        ),
-        "current_agent": "scribe",
-        "activity_log": [ActivityEvent(
-            agent="scribe",
-            status=AgentStatus.DONE,
-            message="Report generated",
-            detail="Stub: placeholder report",
-        )],
-    }
 
 
 # ─── Routing Logic ───
