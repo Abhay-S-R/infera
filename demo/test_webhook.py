@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 
 # Target endpoint (change localhost to your ngrok/cloudflare tunnel URL if testing remotely)
 # Example: URL = "https://your-tunnel-url.ngrok.io/webhooks/news"
-URL = "http://localhost:8000/webhooks/news"
+URL = "https://nemesis-transpose-mandarin.ngrok-free.dev/webhooks/news"
+
 
 async def test_webhook():
     """
@@ -29,9 +30,13 @@ async def test_webhook():
 
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(URL, json=payload, timeout=10.0)
+            headers = {"ngrok-skip-browser-warning": "true"}
+            response = await client.post(URL, json=payload, headers=headers, timeout=10.0)
             print(f"\nStatus Code: {response.status_code}")
-            print(f"Response: {response.json()}")
+            try:
+                print(f"Response JSON: {response.json()}")
+            except json.JSONDecodeError:
+                print(f"Response Text: {response.text}")
         except Exception as e:
             print(f"Error connecting to server: {e}")
 
