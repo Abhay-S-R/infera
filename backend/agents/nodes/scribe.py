@@ -2,14 +2,14 @@
 ASCENT Scribe Agent — Generates final formatted intelligence reports.
 Dev 4 owns this file.
 """
-from backend.services.logger import get_logger
-from backend.services.llm import generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.context import prepare_for_scribe
+from backend.core.logger import get_logger
+from backend.integrations.llm import generate_structured
+from backend.core.budget import check_budget_or_stop, get_budget
+from backend.pipeline.context import prepare_for_scribe
 from backend.agents.state import PipelineState
 from backend.models.schemas import ReportOutput, ActivityEvent, AgentStatus
 from datetime import datetime, timezone
-from backend.services.tracing import trace_agent
+from backend.core.tracing import trace_agent
 
 logger = get_logger("scribe")
 

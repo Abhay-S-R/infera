@@ -10,8 +10,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from backend.services.budget import TokenBudget, check_budget_or_stop, get_budget
-from backend.services.context import research_prompt_block
+from backend.core.budget import TokenBudget, check_budget_or_stop, get_budget
+from backend.pipeline.context import research_prompt_block
 from backend.models.schemas import ResearchOutput
 from backend.agents.state import PipelineState
 from backend.models.schemas import SignalInput
@@ -73,8 +73,8 @@ def test_context_tiers():
 
 async def test_low_budget_pipeline_stop():
     """Sentinel stops when budget is already exhausted (no full pipeline needed)."""
-    from backend.agents.sentinel import sentinel_node
-    from backend.services.budget import TokenBudget
+    from backend.agents.nodes.sentinel import sentinel_node
+    from backend.core.budget import TokenBudget
 
     signal = SignalInput(
         title="Budget test signal",

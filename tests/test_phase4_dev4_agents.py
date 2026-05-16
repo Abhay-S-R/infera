@@ -21,9 +21,9 @@ from backend.models.schemas import (
     InsightType,
     ReportOutput,
 )
-from backend.agents.scout import _generate_agenda, _build_synthesis_prompt
-from backend.agents.scribe import scribe_node
-from backend.services.budget import TokenBudget
+from backend.agents.nodes.scout import _generate_agenda, _build_synthesis_prompt
+from backend.agents.nodes.scribe import scribe_node
+from backend.core.budget import TokenBudget
 
 @pytest.mark.asyncio
 async def test_scout_fallback_agenda():
@@ -37,7 +37,7 @@ async def test_scout_fallback_agenda():
         reasoning="Important",
     )
     # Force fallback by causing generate_structured to raise exception
-    with patch("backend.agents.scout.generate_structured", side_effect=Exception("API Error")):
+    with patch("backend.agents.nodes.scout.generate_structured", side_effect=Exception("API Error")):
         agenda = await _generate_agenda(signal, sentinel_output, None, "General")
         
     assert isinstance(agenda, ResearchAgenda)
@@ -73,7 +73,7 @@ async def test_scribe_post_processing():
     # Mock prepare_for_scribe to return our analysis
     mock_ctx = ({}, analysis, [], 100)
     
-    with patch("backend.agents.scribe.prepare_for_scribe", return_value=mock_ctx):
+    with patch("backend.agents.nodes.scribe.prepare_for_scribe", return_value=mock_ctx):
         # Mock generate_structured to return a report that needs formatting
         raw_report = ReportOutput(
             title="Test Report",
@@ -83,7 +83,7 @@ async def test_scribe_post_processing():
             risk_brief="Risk.",
             confidence_score=0.8
         )
-        with patch("backend.agents.scribe.generate_structured", return_value=(raw_report, {})):
+        with patch("backend.agents.nodes.scribe.generate_structured", return_value=(raw_report, {})):
             # Create pipeline state
             state = {"signal": signal, "budget": TokenBudget(1000)}
             

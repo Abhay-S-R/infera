@@ -2,19 +2,20 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api import analyze, competitors, health, reports, websocket, webhooks
-from backend.config import settings
-from backend.models.database import (
+from backend.api.routes import analyze, competitors, health, reports, webhooks
+from backend.api import websocket
+from backend.core.config import settings
+from backend.core.database import (
     check_database_connection,
     init_db,
     is_database_available,
     set_database_available,
 )
-from backend.services.background import resume_interrupted_workflows
-from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer  # async
-from backend.services.logger import configure_logging, get_logger
-from backend.services.scheduler import start_scheduler, stop_scheduler
-from backend.services.tracing import init_omium
+from backend.pipeline.executor import resume_interrupted_workflows
+from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer  # async
+from backend.core.logger import configure_logging, get_logger
+from backend.pipeline.scheduler import start_scheduler, stop_scheduler
+from backend.core.tracing import init_omium
 
 configure_logging()
 logger = get_logger("main")

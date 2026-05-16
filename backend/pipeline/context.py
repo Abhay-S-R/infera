@@ -17,11 +17,11 @@ from backend.models.schemas import (
     SentinelOutput,
     SignalInput,
 )
-from backend.services.budget import TokenBudget, get_budget
-from backend.services.llm import generate
-from backend.services.logger import get_logger
+from backend.core.budget import TokenBudget, get_budget
+from backend.integrations.llm import generate
+from backend.core.logger import get_logger
 from backend.models.tables import Report, CompetitorProfileRow
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from sqlalchemy import select
 from datetime import datetime, timezone
 

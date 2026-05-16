@@ -18,14 +18,14 @@ from backend.models.schemas import (
     CeoQaPair,
     InsightType,
 )
-from backend.agents.verifier import (
+from backend.agents.nodes.verifier import (
     _apply_entity_gate,
     _evidence_mentions_entity,
     _resolve_primary_entity,
     _rule_based_verified,
     _slug_company,
 )
-from backend.services.context import competitor_profile_prompt_block, resolve_competitor_name
+from backend.pipeline.context import competitor_profile_prompt_block, resolve_competitor_name
 from backend.models.schemas import SignalInput, SentinelOutput, EventType
 
 

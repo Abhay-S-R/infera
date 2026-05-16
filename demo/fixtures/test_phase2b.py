@@ -7,8 +7,8 @@ sys.path.append(os.getcwd())
 
 from backend.models.schemas import SignalInput
 from backend.agents.graph import run_pipeline
-from backend.services.logger import configure_logging
-from backend.services.budget import TokenBudget
+from backend.core.logger import configure_logging
+from backend.core.budget import TokenBudget
 
 async def test_normal_budget_tracking():
     print("\n--- TEST 1: Normal Budget Tracking ---")
@@ -59,7 +59,7 @@ async def test_budget_exhaustion():
 
 async def test_context_compression_trigger():
     print("\n--- TEST 3: Context Compression (50k limit) ---")
-    from backend.agents.strategist import strategist_node
+    from backend.agents.nodes.strategist import strategist_node
     from backend.models.schemas import SentinelOutput, ResearchOutput
     
     # Phase 2b threshold is 50,000 tokens.

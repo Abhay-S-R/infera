@@ -5,7 +5,7 @@ Used by the Scout agent to search the web for competitive intelligence.
 Dev 2 owns this file.
 """
 import httpx
-from backend.config import settings
+from backend.core.config import settings
 from backend.models.schemas import SearchResult
 
 

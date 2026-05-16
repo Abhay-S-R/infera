@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from backend.api.deps import require_database
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from backend.models.schemas import ReportDetailResponse, ReportListItem
 from backend.models.tables import Report, Workflow
 

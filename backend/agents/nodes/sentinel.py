@@ -16,12 +16,12 @@ from backend.models.schemas import (
     ActivityEvent,
     AgentStatus,
 )
-from backend.services.llm import generate_structured
-from backend.services.budget import BudgetExceededError, check_budget_or_stop, get_budget
-from backend.services.events import publish_event
-from backend.services.logger import get_logger
-from backend.services.tracing import trace_agent
-from backend.services.context import competitor_profile_prompt_block
+from backend.integrations.llm import generate_structured
+from backend.core.budget import BudgetExceededError, check_budget_or_stop, get_budget
+from backend.core.events import publish_event
+from backend.core.logger import get_logger
+from backend.core.tracing import trace_agent
+from backend.pipeline.context import competitor_profile_prompt_block
 from backend.agents.state import PipelineState
 
 logger = get_logger("sentinel")

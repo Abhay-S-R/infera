@@ -1,4 +1,4 @@
-from backend.models.database import AsyncSessionLocal, engine
+from backend.core.database import AsyncSessionLocal, engine
 from backend.models.tables import Base, Report, WebhookEvent, Workflow
 
 __all__ = [

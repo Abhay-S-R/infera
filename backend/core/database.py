@@ -3,7 +3,7 @@ import time
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine, async_sessionmaker
 
-from backend.config import settings
+from backend.core.config import settings
 
 _db_available: bool = True
 _db_last_check: float = 0.0

@@ -7,9 +7,9 @@ from pathlib import Path
 
 from fpdf import FPDF
 
-from backend.config import settings
+from backend.core.config import settings
 from backend.models.schemas import ReportOutput
-from backend.services.logger import get_logger
+from backend.core.logger import get_logger
 
 logger = get_logger("pdf_generator")
 

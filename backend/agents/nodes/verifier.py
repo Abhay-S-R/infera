@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from backend.config import settings
+from backend.core.config import settings
 from backend.models.schemas import (
     SignalInput,
     SentinelOutput,
@@ -18,12 +18,12 @@ from backend.models.schemas import (
     VerificationOutput,
     VerificationSourceType,
 )
-from backend.services.llm import generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.events import publish_event
-from backend.services.logger import get_logger
-from backend.services.tracing import trace_agent
-from backend.services.context import (
+from backend.integrations.llm import generate_structured
+from backend.core.budget import check_budget_or_stop, get_budget
+from backend.core.events import publish_event
+from backend.core.logger import get_logger
+from backend.core.tracing import trace_agent
+from backend.pipeline.context import (
     get_competitor_profile,
     load_competitor_profile_for_pipeline,
 )

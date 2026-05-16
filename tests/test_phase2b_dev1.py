@@ -3,6 +3,9 @@ Phase 2b Dev 1 — Crash recovery, scheduled scans, graceful degradation.
 
 Run from project root (Postgres required; Redis optional):
     python tests/test_phase2b_dev1.py
+
+_pytest_: use the project interpreter so pytest-asyncio is available, e.g.:
+    .venv/bin/python -m pytest tests/test_phase2b_dev1.py -v
 """
 from __future__ import annotations
 
@@ -12,6 +15,8 @@ import sys
 import traceback
 import uuid
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 os.environ.setdefault(
     "DATABASE_URL",
@@ -41,6 +46,7 @@ def log(name: str, passed: bool, detail: str = "") -> None:
     print()
 
 
+@pytest.mark.asyncio
 async def test_crash_recovery_resumes_at_scout() -> bool:
     """
     Simulate kill mid-Scout: checkpoint after Sentinel, resume continues at Scout.
@@ -56,8 +62,8 @@ async def test_crash_recovery_resumes_at_scout() -> bool:
         ValidationResult,
         ReportOutput,
     )
-    from backend.services.budget import TokenBudget
-    from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
+    from backend.core.budget import TokenBudget
+    from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer
 
     checkpointer = await init_checkpointer()
     thread_id = f"crash-test-{uuid.uuid4().hex[:8]}"
@@ -120,8 +126,10 @@ async def test_crash_recovery_resumes_at_scout() -> bool:
         return {
             "report_output": ReportOutput(
                 title="Test Report",
-                executive_summary="exec",
-                full_report_markdown="# Report",
+                exec_brief="CEO exec brief",
+                tech_brief="Tech brief",
+                sales_brief="Sales brief",
+                risk_brief="Risk brief",
                 confidence_score=0.8,
             ),
             "current_agent": "scribe",
@@ -186,10 +194,11 @@ async def test_crash_recovery_resumes_at_scout() -> bool:
         await shutdown_checkpointer()
 
 
+@pytest.mark.asyncio
 async def test_redis_publish_fails_silently() -> bool:
-    from backend.services.events import publish_event
+    from backend.core.events import publish_event
 
-    with patch("backend.services.events.create_redis") as mock_redis:
+    with patch("backend.core.events.create_redis") as mock_redis:
         client = AsyncMock()
         client.publish.side_effect = ConnectionError("Redis down")
         client.close = AsyncMock()
@@ -208,9 +217,10 @@ async def test_redis_publish_fails_silently() -> bool:
     return ok
 
 
+@pytest.mark.asyncio
 async def test_scheduled_scan_signal_builder() -> bool:
     from backend.models.tables import Competitor
-    from backend.services.scheduler import signal_for_competitor
+    from backend.pipeline.scheduler import signal_for_competitor
 
     comp = Competitor(
         id=1,
@@ -229,6 +239,7 @@ async def test_scheduled_scan_signal_builder() -> bool:
     return ok
 
 
+@pytest.mark.asyncio
 async def test_postgres_503_middleware() -> bool:
     from httpx import ASGITransport, AsyncClient
     from backend.main import app
@@ -242,6 +253,7 @@ async def test_postgres_503_middleware() -> bool:
     return ok
 
 
+@pytest.mark.asyncio
 async def test_health_503_when_db_down() -> bool:
     from httpx import ASGITransport, AsyncClient
     from backend.main import app

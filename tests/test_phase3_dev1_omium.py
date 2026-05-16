@@ -27,15 +27,15 @@ if sys.platform == "win32":
 @pytest.fixture(autouse=True)
 async def cleanup_database():
     """Ensure the engine is disposed between tests to avoid loop mismatch errors."""
-    from backend.models.database import engine
+    from backend.core.database import engine
     yield
     await engine.dispose()
 
 
-from backend.services.tracing import init_omium, get_tracer, _NoopTracer, _OmiumTracer
-from backend.services.context import get_competitor_history
-from backend.config import settings
-from backend.models.database import AsyncSessionLocal
+from backend.core.tracing import init_omium, get_tracer, _NoopTracer, _OmiumTracer
+from backend.pipeline.context import get_competitor_history
+from backend.core.config import settings
+from backend.core.database import AsyncSessionLocal
 from backend.models.tables import Report
 
 
@@ -110,7 +110,7 @@ class TestAgentTracing:
     
     def test_sentinel_node_imports_tracer(self):
         """Verify sentinel_node imports and uses tracer."""
-        from backend.agents.sentinel import sentinel_node
+        from backend.agents.nodes.sentinel import sentinel_node
         import inspect
         
         source = inspect.getsource(sentinel_node)
@@ -119,7 +119,7 @@ class TestAgentTracing:
     
     def test_scout_node_imports_tracer(self):
         """Verify scout_node imports and uses tracer."""
-        from backend.agents.scout import scout_node
+        from backend.agents.nodes.scout import scout_node
         import inspect
         
         source = inspect.getsource(scout_node)
@@ -128,7 +128,7 @@ class TestAgentTracing:
     
     def test_strategist_node_imports_tracer(self):
         """Verify strategist_node imports and uses tracer."""
-        from backend.agents.strategist import strategist_node
+        from backend.agents.nodes.strategist import strategist_node
         import inspect
         
         source = inspect.getsource(strategist_node)
@@ -137,7 +137,7 @@ class TestAgentTracing:
     
     def test_scribe_node_imports_tracer(self):
         """Verify scribe_node imports and uses tracer."""
-        from backend.agents.scribe import scribe_node
+        from backend.agents.nodes.scribe import scribe_node
         import inspect
         
         source = inspect.getsource(scribe_node)
@@ -146,7 +146,7 @@ class TestAgentTracing:
     
     def test_arbiter_node_imports_tracer(self):
         """Verify arbiter_node imports and uses tracer."""
-        from backend.agents.arbiter import arbiter_node
+        from backend.agents.nodes.arbiter import arbiter_node
         import inspect
         
         source = inspect.getsource(arbiter_node)
@@ -159,7 +159,7 @@ class TestOmiumSpanAttributes:
     
     def test_noop_span_accepts_attributes(self):
         """Verify NoopSpan accepts attributes without error."""
-        from backend.services.tracing import _NoopSpan
+        from backend.core.tracing import _NoopSpan
         
         span = _NoopSpan("test", workflow_id="123", retry=0)
         assert span.name == "test"
@@ -168,7 +168,7 @@ class TestOmiumSpanAttributes:
     
     def test_noop_span_context_manager(self):
         """Verify NoopSpan works as context manager."""
-        from backend.services.tracing import _NoopSpan
+        from backend.core.tracing import _NoopSpan
         
         with _NoopSpan("test") as span:
             assert span is not None

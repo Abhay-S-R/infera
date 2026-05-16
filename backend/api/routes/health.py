@@ -6,10 +6,10 @@ Dashboard polls GET /api/health/stats for workflow/report/token aggregates.
 from fastapi import APIRouter
 from sqlalchemy import func, select
 
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from backend.models.schemas import HealthStatsResponse
 from backend.models.tables import Report, Workflow
-from backend.services.budget import format_cost_usd
+from backend.core.budget import format_cost_usd
 
 router = APIRouter(prefix="/api/health", tags=["health"])
 

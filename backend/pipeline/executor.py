@@ -6,17 +6,17 @@ Runs the full LangGraph agent pipeline and saves results to the database.
 """
 from sqlalchemy import select
 
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from backend.models.tables import Workflow, Report
 from backend.models.schemas import SignalInput
 from backend.agents.graph import get_checkpoint_next_agent, run_pipeline
-from backend.services.checkpointer import get_checkpointer
-from backend.services.events import publish_event
-from backend.services.budget import usage_from_pipeline_result
-from backend.services.delivery import deliver_report
-from backend.services.pdf_generator import write_report_pdf
-from backend.services.profile_writer import update_competitor_profile_from_run
-from backend.services.logger import get_logger
+from backend.pipeline.checkpointer import get_checkpointer
+from backend.core.events import publish_event
+from backend.core.budget import usage_from_pipeline_result
+from backend.integrations.delivery import deliver_report
+from backend.integrations.pdf_generator import write_report_pdf
+from backend.pipeline.profile_writer import update_competitor_profile_from_run
+from backend.core.logger import get_logger
 
 logger = get_logger("dispatcher")
 

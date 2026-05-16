@@ -4,8 +4,8 @@ from typing import Any
 import redis.asyncio as redis
 from redis.exceptions import RedisError
 
-from backend.config import settings
-from backend.services.logger import get_logger
+from backend.core.config import settings
+from backend.core.logger import get_logger
 
 logger = get_logger("events")
 
@@ -43,6 +43,6 @@ async def publish_event(event_type: str, payload: dict[str, Any]) -> None:
         )
     finally:
         try:
-            await client.close()
+            await client.aclose()
         except Exception:
             pass

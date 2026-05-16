@@ -1,7 +1,7 @@
 """Shared FastAPI dependencies."""
 from fastapi import HTTPException
 
-from backend.models.database import is_database_available
+from backend.core.database import is_database_available
 
 
 async def require_database() -> None:

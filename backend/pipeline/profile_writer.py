@@ -16,10 +16,10 @@ from backend.models.schemas import (
     ResearchOutput,
     SignalInput,
 )
-from backend.services.context import get_competitor_profile, upsert_competitor_profile
-from backend.services.llm import generate_structured
-from backend.services.logger import get_logger
-from backend.services.context import resolve_competitor_name
+from backend.pipeline.context import get_competitor_profile, upsert_competitor_profile
+from backend.integrations.llm import generate_structured
+from backend.core.logger import get_logger
+from backend.pipeline.context import resolve_competitor_name
 from backend.models.schemas import SentinelOutput
 
 logger = get_logger("profile_writer")

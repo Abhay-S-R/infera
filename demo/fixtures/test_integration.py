@@ -1,7 +1,7 @@
 import asyncio
 from backend.models.schemas import SignalInput
 from backend.agents.graph import run_pipeline
-from backend.services.logger import configure_logging
+from backend.core.logger import configure_logging
 
 async def run_integration_test():
     configure_logging()

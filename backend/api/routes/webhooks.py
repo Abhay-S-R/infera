@@ -1,11 +1,11 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from backend.models.schemas import SignalInput
 from backend.models.tables import WebhookEvent
 from backend.api.deps import require_database
-from backend.services.background import dispatch_pipeline, enqueue_pipeline_run
+from backend.pipeline.executor import dispatch_pipeline, enqueue_pipeline_run
 
 router = APIRouter()
 

@@ -28,9 +28,9 @@ os.environ.setdefault(
 
 from backend.agents.graph import run_pipeline
 from backend.models.schemas import SignalInput
-from backend.services.context import get_competitor_profile
-from backend.services.logger import configure_logging
-from backend.services.profile_writer import update_competitor_profile_from_run
+from backend.pipeline.context import get_competitor_profile
+from backend.core.logger import configure_logging
+from backend.pipeline.profile_writer import update_competitor_profile_from_run
 
 
 # No placeholder URL — avoids bogus 404 + wrong-entity web noise.

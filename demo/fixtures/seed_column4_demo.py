@@ -19,8 +19,8 @@ os.environ.setdefault(
 )
 
 from backend.models.schemas import CompetitorProfile, LaunchHistoryEntry
-from backend.services.context import upsert_competitor_profile
-from backend.models.database import init_db
+from backend.pipeline.context import upsert_competitor_profile
+from backend.core.database import init_db
 
 DEMO_COMPETITOR = "Nimbus AI"
 

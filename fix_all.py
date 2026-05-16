@@ -5,7 +5,7 @@ def fix_agent(path, agent_name):
         content = f.read()
 
     # Replace import
-    content = content.replace("from backend.services.tracing import get_tracer", "from backend.services.tracing import trace_agent")
+    content = content.replace("from backend.core.tracing import get_tracer", "from backend.core.tracing import trace_agent")
     
     # Add decorator
     content = re.sub(r'async def ' + agent_name + r'_node', '@trace_agent("' + agent_name + '")\nasync def ' + agent_name + '_node', content)

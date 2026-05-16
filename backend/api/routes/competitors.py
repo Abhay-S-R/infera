@@ -3,14 +3,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.api.deps import require_database
-from backend.models.database import AsyncSessionLocal
+from backend.core.database import AsyncSessionLocal
 from backend.models.schemas import (
     CompetitorCreate,
     CompetitorProfileResponse,
     CompetitorResponse,
 )
 from backend.models.tables import Competitor
-from backend.services.context import get_competitor_profile
+from backend.pipeline.context import get_competitor_profile
 
 router = APIRouter(prefix="/api", dependencies=[Depends(require_database)])
 

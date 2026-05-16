@@ -20,15 +20,15 @@ from backend.models.schemas import (
     CoverageEvaluation,
     ResearchAgenda,
 )
-from backend.services.llm import generate, generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.events import publish_event
-from backend.services.logger import get_logger
-from backend.services.tracing import trace_agent
+from backend.integrations.llm import generate, generate_structured
+from backend.core.budget import check_budget_or_stop, get_budget
+from backend.core.events import publish_event
+from backend.core.logger import get_logger
+from backend.core.tracing import trace_agent
 from backend.agents.state import PipelineState
 from backend.agents.tools.web_search import search_web
 from backend.agents.tools.url_scraper import scrape_url
-from backend.services.context import competitor_profile_prompt_block
+from backend.pipeline.context import competitor_profile_prompt_block
 
 logger = get_logger("scout")
 

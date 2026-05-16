@@ -14,12 +14,12 @@ from backend.models.schemas import (
     ActivityEvent,
     AgentStatus,
 )
-from backend.services.llm import generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.events import publish_event
-from backend.services.logger import get_logger
+from backend.integrations.llm import generate_structured
+from backend.core.budget import check_budget_or_stop, get_budget
+from backend.core.events import publish_event
+from backend.core.logger import get_logger
 from backend.agents.state import PipelineState
-from backend.services.tracing import trace_agent
+from backend.core.tracing import trace_agent
 
 logger = get_logger("arbiter")
 

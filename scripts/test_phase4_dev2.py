@@ -59,8 +59,8 @@ def run_pytest() -> bool:
 async def test_db_profile_roundtrip() -> bool:
     header("2. Database — competitor profile seed & read")
     try:
-        from backend.models.database import check_database_connection, init_db
-        from backend.services.context import get_competitor_profile, upsert_competitor_profile
+        from backend.core.database import check_database_connection, init_db
+        from backend.pipeline.context import get_competitor_profile, upsert_competitor_profile
         from backend.models.schemas import CompetitorProfile, LaunchHistoryEntry
 
         if not await check_database_connection():
@@ -102,7 +102,7 @@ async def test_db_profile_roundtrip() -> bool:
 def test_pdf_export() -> bool:
     header("3. PDF export (no APIs)")
     try:
-        from backend.services.pdf_generator import write_report_pdf
+        from backend.integrations.pdf_generator import write_report_pdf
         from backend.models.schemas import ReportOutput
 
         report = ReportOutput(
@@ -127,7 +127,7 @@ def test_pdf_export() -> bool:
 
 async def test_verifier_checks_offline() -> bool:
     header("4. Verifier rules (offline)")
-    from backend.agents.verifier import _rule_based_verified, _slug_company
+    from backend.agents.nodes.verifier import _rule_based_verified, _slug_company
     from backend.models.schemas import VerificationCheck, VerificationSourceType
 
     assert _slug_company("Nimbus AI") == "nimbusai"
@@ -158,7 +158,7 @@ async def seed_demo_profile() -> bool:
         from demo.fixtures.seed_column4_demo import main as seed_main
 
         await seed_main()
-        from backend.services.context import get_competitor_profile
+        from backend.pipeline.context import get_competitor_profile
 
         p = await get_competitor_profile("Nimbus AI")
         if not p or not p.launch_history:
@@ -172,7 +172,7 @@ async def seed_demo_profile() -> bool:
 
 
 def _check_api_keys() -> bool:
-    from backend.config import settings
+    from backend.core.config import settings
 
     missing = []
     if not settings.GROQ_API_KEY:
@@ -224,7 +224,7 @@ async def test_live_nimbus_pipeline() -> bool:
     header("7. LIVE — Nimbus AI pipeline (uses seeded memory)")
     from backend.agents.graph import run_pipeline
     from backend.models.schemas import SignalInput
-    from backend.services.context import get_competitor_profile
+    from backend.pipeline.context import get_competitor_profile
 
     profile_before = await get_competitor_profile("Nimbus AI")
     if profile_before:
@@ -273,7 +273,7 @@ async def test_live_nimbus_pipeline() -> bool:
     if report:
         print(f"   Scribe: exec={len(report.exec_brief)} tech={len(report.tech_brief)} "
               f"sales={len(report.sales_brief)} risk={len(report.risk_brief)} chars")
-        from backend.services.pdf_generator import write_report_pdf
+        from backend.integrations.pdf_generator import write_report_pdf
         pdf = write_report_pdf(report, "test-phase4-nimbus-live")
         if pdf:
             print(f"   PDF: {pdf}")

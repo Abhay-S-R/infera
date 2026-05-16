@@ -5,7 +5,7 @@ All agents call this module for LLM inference.
 It dynamically routes to Groq (for speed) or Gemini (for complex reasoning) based on the model name.
 
 Usage:
-    from backend.services.llm import generate, generate_structured, LLMUsage
+    from backend.integrations.llm import generate, generate_structured, LLMUsage
 
     text, usage = await generate("Summarize...", model="llama-3.3-70b-versatile")
 
@@ -29,12 +29,12 @@ from google.genai import types
 from groq import AsyncGroq
 from pydantic import BaseModel
 
-from backend.config import settings
-from backend.services.budget import BudgetExceededError
-from backend.services.logger import get_logger
+from backend.core.config import settings
+from backend.core.budget import BudgetExceededError
+from backend.core.logger import get_logger
 
 if TYPE_CHECKING:
-    from backend.services.budget import TokenBudget
+    from backend.core.budget import TokenBudget
 
 logger = get_logger("llm")
 

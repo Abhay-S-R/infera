@@ -10,12 +10,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
-from backend.config import settings
-from backend.models.database import AsyncSessionLocal
+from backend.core.config import settings
+from backend.core.database import AsyncSessionLocal
 from backend.models.schemas import SignalInput
 from backend.models.tables import Competitor
-from backend.services.background import enqueue_pipeline_run
-from backend.services.logger import get_logger
+from backend.pipeline.executor import enqueue_pipeline_run
+from backend.core.logger import get_logger
 
 logger = get_logger("scheduler")
 

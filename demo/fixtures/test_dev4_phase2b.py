@@ -23,7 +23,7 @@ os.environ.setdefault(
 
 
 def test_format_cost():
-    from backend.services.budget import format_cost_usd
+    from backend.core.budget import format_cost_usd
 
     assert format_cost_usd(0.0) == "$0.00"
     assert format_cost_usd(12.345) == "$12.35"
@@ -31,7 +31,7 @@ def test_format_cost():
 
 
 def test_estimate_state_tokens():
-    from backend.services.context import STATE_TOKEN_THRESHOLD, estimate_state_tokens
+    from backend.pipeline.context import STATE_TOKEN_THRESHOLD, estimate_state_tokens
     from backend.models.schemas import ResearchOutput, SignalInput
     from backend.agents.state import PipelineState
 
@@ -63,7 +63,7 @@ def test_estimate_state_tokens():
 async def test_health_stats_api():
     from httpx import ASGITransport, AsyncClient
     from backend.main import app
-    from backend.models.database import init_db, AsyncSessionLocal
+    from backend.core.database import init_db, AsyncSessionLocal
     from backend.models.tables import Workflow, Report
 
     await init_db()
@@ -103,8 +103,8 @@ async def test_health_stats_api():
 async def test_compress_research_mocked():
     from unittest.mock import AsyncMock, patch
 
-    from backend.services.budget import TokenBudget
-    from backend.services.context import SUMMARY_MAX_CHARS, compress_research_output
+    from backend.core.budget import TokenBudget
+    from backend.pipeline.context import SUMMARY_MAX_CHARS, compress_research_output
     from backend.models.schemas import ResearchOutput
 
     research = ResearchOutput(
@@ -115,7 +115,7 @@ async def test_compress_research_mocked():
     )
     budget = TokenBudget()
 
-    with patch("backend.services.context.generate", new_callable=AsyncMock) as mock_gen:
+    with patch("backend.pipeline.context.generate", new_callable=AsyncMock) as mock_gen:
         mock_gen.return_value = ("Compressed summary text.", None)
         out = await compress_research_output(research, budget)
 

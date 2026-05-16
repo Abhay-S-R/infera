@@ -2,7 +2,7 @@ import asyncio
 import os
 from backend.models.schemas import SignalInput
 from backend.agents.graph import run_pipeline
-from backend.services.logger import configure_logging
+from backend.core.logger import configure_logging
 
 async def test_phase3_dev4_features():
     print("\n--- TEST: Phase 3 Dev 4 (Analyst Parity) ---")

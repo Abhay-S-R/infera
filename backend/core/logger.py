@@ -3,7 +3,7 @@ ASCENT Structured Logger — JSON-formatted logging with agent context.
 
 Every agent and service should use this module for logging:
 
-    from backend.services.logger import get_logger
+    from backend.core.logger import get_logger
     logger = get_logger("sentinel")
 
     logger.info("signal_scored", relevance=0.85, entity="NVIDIA")
@@ -149,7 +149,7 @@ def _setup_root_logger() -> None:
         return
     _initialized = True
 
-    from backend.config import settings
+    from backend.core.config import settings
 
     root = logging.getLogger()
     root.setLevel(getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))

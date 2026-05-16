@@ -8,8 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from backend.config import settings
-from backend.services.logger import get_logger
+from backend.core.config import settings
+from backend.core.logger import get_logger
 
 logger = get_logger("budget")
 

@@ -11,8 +11,8 @@ from typing import Optional
 
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
-from backend.config import settings
-from backend.services.logger import get_logger
+from backend.core.config import settings
+from backend.core.logger import get_logger
 
 logger = get_logger("checkpointer")
 

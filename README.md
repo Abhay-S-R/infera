@@ -146,38 +146,26 @@ ascent/
 │   ├── main.py                     # FastAPI application entry point
 │   ├── config.py                   # Environment configuration (Pydantic Settings)
 │   │
-│   ├── api/
-│   │   ├── webhooks.py             # Webhook ingestion endpoints
-│   │   ├── reports.py              # Report retrieval endpoints
-│   │   ├── analyze.py              # Manual analysis trigger
-│   │   ├── competitors.py          # Competitor CRUD operations
-│   │   └── websocket.py            # WebSocket activity stream
-│   │
 │   ├── agents/
 │   │   ├── state.py                # LangGraph PipelineState definition
 │   │   ├── graph.py                # StateGraph with agent nodes and edges
-│   │   ├── sentinel.py             # Signal monitoring and filtering
-│   │   ├── scout.py                # Web research and evidence gathering
-│   │   ├── strategist.py           # Competitive analysis and insights
-│   │   ├── arbiter.py              # Validation and quality assurance
-│   │   ├── scribe.py               # Report generation
+│   │   ├── nodes/                  # Agent implementations (sentinel, verifier, scout, …)
 │   │   └── tools/
 │   │       ├── web_search.py       # Tavily search integration
-│   │       ├── url_scraper.py      # URL content extraction
-│   │       └── pdf_generator.py    # PDF report rendering
+│   │       └── url_scraper.py      # URL content extraction
 │   │
-│   ├── models/
-│   │   ├── database.py             # Async SQLAlchemy engine and sessions
-│   │   ├── tables.py               # Database table definitions
-│   │   └── schemas.py              # Pydantic models for agent I/O
+│   ├── api/
+│   │   ├── deps.py
+│   │   ├── websocket.py
+│   │   └── routes/                 # analyze, competitors, health, reports, webhooks
 │   │
-│   └── services/
-│       ├── llm.py                  # Gemini API client wrapper
-│       ├── logger.py               # Structured JSON logging
-│       ├── budget.py               # Token and cost budget tracking
-│       ├── context.py              # Tiered context management
-│       ├── notifications.py        # Slack / email dispatch
-│       └── scheduler.py            # Periodic scan scheduling
+│   ├── core/                       # Config, DB, logging, budget, events, tracing
+│   ├── integrations/             # LLM client, SendGrid/Slack delivery, PDF export
+│   ├── pipeline/                   # Executor, checkpointing, scheduler, context, profiles
+│   │
+│   └── models/
+│       ├── tables.py               # Database table definitions
+│       └── schemas.py              # Pydantic models for agent I/O
 │
 ├── frontend/
 │   ├── index.html

@@ -43,7 +43,7 @@ def log(name: str, passed: bool, detail: str = "") -> None:
 
 
 async def test_database_and_tables() -> bool:
-    from backend.models.database import init_db, AsyncSessionLocal
+    from backend.core.database import init_db, AsyncSessionLocal
     from backend.models.tables import Competitor, Workflow
     from sqlalchemy import select
 
@@ -67,7 +67,7 @@ async def test_database_and_tables() -> bool:
 
 
 async def test_checkpointer_setup() -> bool:
-    from backend.services.checkpointer import init_checkpointer, get_checkpointer, shutdown_checkpointer
+    from backend.pipeline.checkpointer import init_checkpointer, get_checkpointer, shutdown_checkpointer
 
     saver = await init_checkpointer()
     same = await get_checkpointer()
@@ -80,7 +80,7 @@ async def test_checkpointer_setup() -> bool:
 
 async def test_graph_compiles_with_checkpointer() -> bool:
     from backend.agents.graph import build_graph, pipeline_config
-    from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
+    from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer
 
     checkpointer = await init_checkpointer()
     graph = build_graph(checkpointer=checkpointer)
@@ -95,9 +95,9 @@ async def test_graph_compiles_with_checkpointer() -> bool:
 async def test_competitors_api_crud() -> bool:
     from httpx import ASGITransport, AsyncClient
     from backend.main import app
-    from backend.models.database import init_db
-    from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
-    from backend.services.scheduler import stop_scheduler
+    from backend.core.database import init_db
+    from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer
+    from backend.pipeline.scheduler import stop_scheduler
 
     await init_db()
     await init_checkpointer()
@@ -143,8 +143,8 @@ async def test_competitors_api_crud() -> bool:
 
 
 async def test_scheduler_registers_job() -> bool:
-    from backend.services.scheduler import start_scheduler, stop_scheduler, _scheduler
-    from backend.config import settings
+    from backend.pipeline.scheduler import start_scheduler, stop_scheduler, _scheduler
+    from backend.core.config import settings
 
     stop_scheduler()
     sched = start_scheduler()
@@ -161,10 +161,10 @@ async def test_scheduler_registers_job() -> bool:
 
 
 async def test_resume_interrupted_workflows() -> bool:
-    from backend.models.database import AsyncSessionLocal, init_db
+    from backend.core.database import AsyncSessionLocal, init_db
     from backend.models.tables import Workflow, WebhookEvent
-    from backend.services.background import resume_interrupted_workflows
-    from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
+    from backend.pipeline.executor import resume_interrupted_workflows
+    from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer
 
     await init_db()
     await init_checkpointer()
@@ -195,7 +195,7 @@ async def test_resume_interrupted_workflows() -> bool:
         "current_agent": "done",
     }
 
-    with patch("backend.services.background.run_pipeline", new_callable=AsyncMock) as mock_run:
+    with patch("backend.pipeline.executor.run_pipeline", new_callable=AsyncMock) as mock_run:
         mock_run.return_value = mock_result
         await resume_interrupted_workflows()
 
@@ -221,8 +221,8 @@ async def test_resume_interrupted_workflows() -> bool:
 async def test_checkpoint_tables_exist() -> bool:
     """PostgresSaver.setup() creates LangGraph checkpoint tables."""
     import psycopg
-    from backend.config import settings
-    from backend.services.checkpointer import init_checkpointer, shutdown_checkpointer
+    from backend.core.config import settings
+    from backend.pipeline.checkpointer import init_checkpointer, shutdown_checkpointer
 
     await init_checkpointer()
     tables: list[str] = []

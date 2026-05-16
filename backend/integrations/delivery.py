@@ -15,11 +15,11 @@ from typing import Any
 
 import httpx
 
-from backend.config import settings
+from backend.core.config import settings
 from backend.models.schemas import ReportOutput
-from backend.services.events import publish_event
-from backend.services.logger import get_logger
-from backend.services.llm import generate
+from backend.core.events import publish_event
+from backend.core.logger import get_logger
+from backend.integrations.llm import generate
 
 logger = get_logger("delivery")
 

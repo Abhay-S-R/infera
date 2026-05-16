@@ -2,9 +2,9 @@ import asyncio
 import json
 from backend.models.schemas import SignalInput, ResearchOutput, SearchResult
 from backend.agents.state import PipelineState
-from backend.agents.strategist import strategist_node
-from backend.agents.scribe import scribe_node
-from backend.services.logger import configure_logging
+from backend.agents.nodes.strategist import strategist_node
+from backend.agents.nodes.scribe import scribe_node
+from backend.core.logger import configure_logging
 
 async def run_test():
     configure_logging()

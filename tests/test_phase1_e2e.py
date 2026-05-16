@@ -53,7 +53,7 @@ async def timed(coro):
 # ─── Test 1: Groq plain text ───
 
 async def test_groq_plain_text():
-    from backend.services.llm import generate
+    from backend.integrations.llm import generate
 
     (text, _usage), elapsed = await timed(
         generate("Say hello in one sentence.", system="You are helpful.", model="llama-3.3-70b-versatile")
@@ -66,7 +66,7 @@ async def test_groq_plain_text():
 # ─── Test 2: Gemini plain text ───
 
 async def test_gemini_plain_text():
-    from backend.services.llm import generate
+    from backend.integrations.llm import generate
 
     (text, _usage), elapsed = await timed(
         generate("Say hello in one sentence.", system="You are helpful.", model="gemini-3.1-flash-lite")
@@ -79,7 +79,7 @@ async def test_gemini_plain_text():
 # ─── Test 3: Groq structured output (SentinelOutput) ───
 
 async def test_groq_structured():
-    from backend.services.llm import generate_structured
+    from backend.integrations.llm import generate_structured
     from backend.models.schemas import SentinelOutput
 
     (result, _usage), elapsed = await timed(
@@ -107,7 +107,7 @@ async def test_groq_structured():
 # ─── Test 4: Gemini structured output (AnalysisOutput) ───
 
 async def test_gemini_structured():
-    from backend.services.llm import generate_structured
+    from backend.integrations.llm import generate_structured
     from backend.models.schemas import AnalysisOutput
 
     (result, _usage), elapsed = await timed(
@@ -176,7 +176,7 @@ async def test_full_pipeline():
 
     # Check all agent outputs exist
     sentinel = result.get("sentinel_output")
-    research = result.get("research_output")
+    research_list = result.get("research_output", [])
     analysis = result.get("analysis_output")
     report = result.get("report_output")
     events = result.get("activity_log", [])
@@ -184,22 +184,25 @@ async def test_full_pipeline():
     checks = {
         "sentinel_exists": sentinel is not None,
         "sentinel_relevant": sentinel and sentinel.relevance_score > 0.3,
-        "research_exists": research is not None,
-        "research_has_findings": research and len(research.key_findings) > 0,
-        "research_has_sources": research and research.sources_consulted > 0,
+        "research_exists": len(research_list) > 0,
+        "research_has_findings": any(r.key_findings for r in research_list),
+        "research_has_sources": any(r.sources_consulted > 0 for r in research_list),
         "analysis_exists": analysis is not None,
         "report_exists": report is not None,
         "report_has_title": report and len(report.title) > 10,
-        "report_has_markdown": report and len(report.full_report_markdown) > 100,
+        "report_has_markdown": report and len(report.exec_brief) > 100,
         "events_logged": len(events) >= 4,
     }
 
     all_ok = all(checks.values())
     failed = [k for k, v in checks.items() if not v]
 
+    total_sources = sum(r.sources_consulted for r in research_list)
+    total_findings = sum(len(r.key_findings) for r in research_list)
+
     detail_lines = [
         f"Sentinel: relevance={sentinel.relevance_score if sentinel else 'N/A'}, entities={sentinel.entities[:3] if sentinel else []}",
-        f"Scout: {research.sources_consulted if research else 0} sources, {len(research.key_findings) if research else 0} findings",
+        f"Scout: {total_sources} sources, {total_findings} findings",
         f"Report: {report.title[:60] if report else 'N/A'}",
         f"Confidence: {report.confidence_score if report else 'N/A'}",
         f"Activity events: {len(events)}",

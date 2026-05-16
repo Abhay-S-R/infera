@@ -2,14 +2,14 @@
 ASCENT Strategist Agent — Synthesizes research into competitive analysis.
 Dev 4 owns this file.
 """
-from backend.services.logger import get_logger
-from backend.services.llm import generate_structured
-from backend.services.budget import check_budget_or_stop, get_budget
-from backend.services.context import prepare_for_strategist, research_prompt_block
+from backend.core.logger import get_logger
+from backend.integrations.llm import generate_structured
+from backend.core.budget import check_budget_or_stop, get_budget
+from backend.pipeline.context import prepare_for_strategist, research_prompt_block
 from backend.agents.state import PipelineState
 from backend.models.schemas import AnalysisOutput, ActivityEvent, AgentStatus
-from backend.services.tracing import trace_agent
-from backend.services.context import competitor_profile_prompt_block
+from backend.core.tracing import trace_agent
+from backend.pipeline.context import competitor_profile_prompt_block
 
 logger = get_logger("strategist")
 

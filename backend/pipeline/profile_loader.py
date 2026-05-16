@@ -6,13 +6,13 @@ touching graph wiring.
 """
 from backend.agents.state import PipelineState
 from backend.models.schemas import ActivityEvent, AgentStatus, SignalInput
-from backend.services.context import (
+from backend.pipeline.context import (
     competitor_profile_prompt_block,
     load_competitor_profile_for_pipeline,
     resolve_competitor_name,
 )
-from backend.services.logger import get_logger
-from backend.services.tracing import trace_agent
+from backend.core.logger import get_logger
+from backend.core.tracing import trace_agent
 
 logger = get_logger("profile_loader")
 

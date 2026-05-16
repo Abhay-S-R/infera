@@ -4,8 +4,8 @@ import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from redis.exceptions import RedisError
 
-from backend.services.events import create_redis, get_pubsub_channel
-from backend.services.logger import get_logger
+from backend.core.events import create_redis, get_pubsub_channel
+from backend.core.logger import get_logger
 
 router = APIRouter()
 logger = get_logger("websocket")
@@ -54,7 +54,7 @@ async def activity_feed(websocket: WebSocket) -> None:
     finally:
         try:
             await pubsub.unsubscribe(get_pubsub_channel())
-            await pubsub.close()
-            await redis.close()
+            await pubsub.aclose()
+            await redis.aclose()
         except Exception:
             pass
