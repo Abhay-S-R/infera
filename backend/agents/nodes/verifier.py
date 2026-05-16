@@ -1,5 +1,5 @@
 """
-ASCENT Verifier Agent — skeptical primary-source verification (Phase 4).
+INFERA Verifier Agent — skeptical primary-source verification (Phase 4).
 
 Runs multi-step checks before Scout fan-out: signal URL, official blog,
 product/pricing page, LinkedIn, optional SEC. Fail-closed on fabricated signals.

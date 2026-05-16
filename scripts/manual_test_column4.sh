@@ -12,7 +12,7 @@ if [[ "${1:-}" == "--live" ]]; then
 fi
 
 echo "=============================================="
-echo "  ASCENT Column 4 — Manual Verification"
+echo "  INFERA Column 4 — Manual Verification"
 echo "  Dev 2 (infra) + Dev 4 (agents) integration"
 echo "=============================================="
 echo ""

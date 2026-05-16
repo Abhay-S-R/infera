@@ -1,5 +1,5 @@
 """
-ASCENT Sentinel Agent — filters and classifies incoming competitive signals.
+INFERA Sentinel Agent — filters and classifies incoming competitive signals.
 
 The Sentinel is the first agent in the pipeline. It receives raw signals
 (news articles, webhooks, manual queries) and decides:
@@ -26,7 +26,7 @@ from backend.agents.state import PipelineState
 
 logger = get_logger("sentinel")
 
-SENTINEL_SYSTEM_PROMPT = """You are the Sentinel — the first agent in ASCENT, an autonomous competitive intelligence system.
+SENTINEL_SYSTEM_PROMPT = """You are the Sentinel — the first agent in INFERA, an autonomous competitive intelligence system.
 
 Your job is to rapidly evaluate incoming signals (news, announcements, events) and determine:
 1. **Relevance Score (0-1):** How important is this signal for competitive intelligence?

@@ -1,5 +1,5 @@
 """
-ASCENT Arbiter Agent — validates analysis against research evidence.
+INFERA Arbiter Agent — validates analysis against research evidence.
 
 The Arbiter cross-references claims in the Strategist's AnalysisOutput
 against the Scout's ResearchOutput. If confidence is too low, it sends
@@ -23,7 +23,7 @@ from backend.core.tracing import trace_agent
 
 logger = get_logger("arbiter")
 
-ARBITER_SYSTEM_PROMPT = """You are the Arbiter — the quality-control agent in ASCENT, an autonomous competitive intelligence system.
+ARBITER_SYSTEM_PROMPT = """You are the Arbiter — the quality-control agent in INFERA, an autonomous competitive intelligence system.
 
 ## Your Mission
 Cross-reference every major claim in the Strategist's analysis against the Scout's research evidence. Produce a clear approve/reject decision.

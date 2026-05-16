@@ -1,4 +1,4 @@
-"""Omium tracing integration for ASCENT.
+"""Omium tracing integration for INFERA.
 
 Provides a `get_tracer()` function that returns a tracer initialized with
 the Omium API key and endpoint from settings.

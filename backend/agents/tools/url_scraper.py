@@ -1,5 +1,5 @@
 """
-ASCENT URL Scraper Tool — extracts text content from web pages.
+INFERA URL Scraper Tool — extracts text content from web pages.
 Used by the Scout agent to get full article content from search result URLs.
 
 Dev 2 owns this file.

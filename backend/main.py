@@ -20,7 +20,7 @@ from backend.core.tracing import init_omium
 configure_logging()
 logger = get_logger("main")
 
-app = FastAPI(title="ASCENT Backend")
+app = FastAPI(title="INFERA Backend")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -42,7 +42,7 @@ app.include_router(websocket.router)
 async def root():
     """Ngrok sanity check — there is no UI at `/`; use these paths."""
     return {
-        "service": "ASCENT",
+        "service": "INFERA",
         "docs": "/docs",
         "health": "/health",
         "webhooks": {

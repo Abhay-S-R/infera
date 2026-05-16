@@ -32,7 +32,7 @@ os.environ.setdefault(
     "DATABASE_URL",
     os.environ.get(
         "DATABASE_URL",
-        "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
+        "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db",
     ),
 )
 
@@ -317,7 +317,7 @@ async def main() -> int:
     )
     args = parser.parse_args()
 
-    print("ASCENT Phase 4 — Dev 2 Foundation Test Suite")
+    print("INFERA Phase 4 — Dev 2 Foundation Test Suite")
     print(f"Repo: {ROOT}")
 
     results: list[tuple[str, bool]] = []

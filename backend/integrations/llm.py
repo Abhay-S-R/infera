@@ -1,5 +1,5 @@
 """
-ASCENT LLM Service — Gemini & Groq API wrapper.
+INFERA LLM Service — Gemini & Groq API wrapper.
 
 All agents call this module for LLM inference.
 It dynamically routes to Groq (for speed) or Gemini (for complex reasoning) based on the model name.

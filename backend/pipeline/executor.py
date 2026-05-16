@@ -1,5 +1,5 @@
 """
-ASCENT Background Pipeline Dispatcher.
+INFERA Background Pipeline Dispatcher.
 
 Called by webhook/analyze endpoints as a FastAPI BackgroundTask.
 Runs the full LangGraph agent pipeline and saves results to the database.
@@ -300,7 +300,7 @@ async def enqueue_pipeline_run(signal: SignalInput, *, source: str = "scheduled"
 
 async def dispatch_pipeline(webhook_id: int, payload: dict[str, object]) -> None:
     """
-    Run the full ASCENT agent pipeline in the background.
+    Run the full INFERA agent pipeline in the background.
 
     1. Create a Workflow record (status=running)
     2. Run the LangGraph pipeline (Sentinel→Scout→Strategist→Arbiter→Scribe)

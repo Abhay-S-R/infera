@@ -66,7 +66,7 @@ async def main():
             for k in SCENARIOS:
                 print(f"  {k}")
     else:
-        print("ASCENT Phase 2b Manual Testing Script")
+        print("INFERA Phase 2b Manual Testing Script")
         print("Run with a scenario name to trigger the pipeline:")
         for k, v in SCENARIOS.items():
             print(f"\n  python3 tests/trigger_phase2b.py {k}")

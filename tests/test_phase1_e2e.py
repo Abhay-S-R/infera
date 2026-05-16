@@ -1,5 +1,5 @@
 """
-ASCENT Phase 1 — End-to-End Verification Test Suite
+INFERA Phase 1 — End-to-End Verification Test Suite
 
 Run from project root:
     python tests/test_phase1_e2e.py
@@ -287,7 +287,7 @@ async def test_webhook_to_report():
 async def main():
     print()
     print("=" * 60)
-    print("  ASCENT Phase 1 — End-to-End Verification")
+    print("  INFERA Phase 1 — End-to-End Verification")
     print("=" * 60)
     print()
 

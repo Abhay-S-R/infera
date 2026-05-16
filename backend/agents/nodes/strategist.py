@@ -1,5 +1,5 @@
 """
-ASCENT Strategist Agent — Synthesizes research into competitive analysis.
+INFERA Strategist Agent — Synthesizes research into competitive analysis.
 Dev 4 owns this file.
 """
 from backend.core.logger import get_logger

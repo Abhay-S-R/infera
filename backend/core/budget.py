@@ -1,5 +1,5 @@
 """
-ASCENT Token Budget — per-workflow token and cost limits.
+INFERA Token Budget — per-workflow token and cost limits.
 
 Dev 4 owns this file. Agents check budget before LLM calls; llm.py tracks usage.
 """

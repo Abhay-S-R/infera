@@ -19,7 +19,7 @@ async def run_integration_test():
         content="OpenAI has officially announced that GPT-5 will be released next month, featuring vastly improved reasoning capabilities and native multi-modal integration. The new model is expected to outperform previous versions significantly and lower API costs by 20%."
     )
     
-    print("[+] Starting the full ASCENT pipeline...")
+    print("[+] Starting the full INFERA pipeline...")
     final_state = await run_pipeline(signal, workflow_id="integration-test-001")
     
     print("\n========================================")

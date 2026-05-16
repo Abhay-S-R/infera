@@ -20,11 +20,11 @@ import pytest
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db",
 )
 os.environ.setdefault(
     "DATABASE_URL_SYNC",
-    "postgresql://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql://infera:infera_pass@localhost:5433/infera_db",
 )
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -270,7 +270,7 @@ async def test_health_503_when_db_down() -> bool:
 async def main() -> None:
     print()
     print("=" * 60)
-    print("  ASCENT Phase 2b Dev 1 — Verification")
+    print("  INFERA Phase 2b Dev 1 — Verification")
     print("=" * 60)
     print()
 

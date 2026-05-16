@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db",
 )
 
 from backend.models.schemas import CompetitorProfile, LaunchHistoryEntry

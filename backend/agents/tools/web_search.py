@@ -1,5 +1,5 @@
 """
-ASCENT Web Search Tool — Tavily API wrapper.
+INFERA Web Search Tool — Tavily API wrapper.
 Used by the Scout agent to search the web for competitive intelligence.
 
 Dev 2 owns this file.

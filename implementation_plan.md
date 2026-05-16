@@ -1,4 +1,4 @@
-# ASCENT — Implementation Plan
+# INFERA — Implementation Plan
 
 **Autonomous Strategic Competitive Event & News Tracker**
 
@@ -119,7 +119,7 @@ Infrastructure:
 | Dev | Task | Deliverable |
 |-----|------|-------------|
 | **Dev 1** | Docker Compose: PostgreSQL + Redis. Database schema (webhooks, reports, workflows, competitors tables). FastAPI skeleton with health check. | `docker-compose up` works. DB migrations run. `GET /health` returns 200. |
-| **Dev 2** | LangGraph project structure. Define `PipelineState` TypedDict. Create empty graph with all 5 nodes wired. Basic Gemini client wrapper. | `python -m ascent.pipeline` runs the empty graph without errors. |
+| **Dev 2** | LangGraph project structure. Define `PipelineState` TypedDict. Create empty graph with all 5 nodes wired. Basic Gemini client wrapper. | `python -m infera.pipeline` runs the empty graph without errors. |
 | **Dev 3** | Frontend scaffold: `index.html`, `styles.css`, `app.js`. Dashboard layout with sidebar + main content area. WebSocket connection stub. | Open `index.html` in browser → see the dashboard skeleton. |
 | **Dev 4** | Environment setup: `.env.example` with all API keys. README quickstart. Shared utility modules: logging, config, structured output schemas (Pydantic models for all agent outputs). | Every dev can `cp .env.example .env`, fill keys, and run. |
 
@@ -196,7 +196,7 @@ Infrastructure:
 
 | Time | What Happens | What the Audience Sees |
 |------|-------------|----------------------|
-| 0:00–0:30 | Introduction | Explain the problem: "Competitive intelligence takes analysts hours. ASCENT does it autonomously." |
+| 0:00–0:30 | Introduction | Explain the problem: "Competitive intelligence takes analysts hours. INFERA does it autonomously." |
 | 0:30–1:00 | Show the dashboard | Clean, premium UI. Competitor configuration. Empty report list. |
 | 1:00–1:30 | Trigger the pipeline | Send a webhook (simulating a news alert about a competitor). Dashboard shows the signal arriving. |
 | 1:30–3:30 | Watch agents work | Real-time activity feed shows: Sentinel filtering → Scout searching the web → Strategist analyzing → Arbiter validating → (maybe a retry loop) → Scribe generating report. Pipeline visualization lights up in sequence. |
@@ -218,7 +218,7 @@ Infrastructure:
 ## Project Structure
 
 ```
-ascent/
+infera/
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
@@ -289,7 +289,7 @@ ascent/
 > **Q1: LLM Provider** — Are you set on Gemini 2.0 Flash, or do you have API keys for OpenAI/Anthropic? Gemini Flash is cheapest and fastest but some agents may benefit from stronger reasoning (GPT-4o / Claude for the Strategist).
 
 > [!IMPORTANT]
-> **Q2: Target Industry** — ASCENT can track any industry. For the demo, should we pre-configure it for a specific sector (e.g., AI/tech companies, fintech, healthcare)? A focused demo is more compelling than a generic one.
+> **Q2: Target Industry** — INFERA can track any industry. For the demo, should we pre-configure it for a specific sector (e.g., AI/tech companies, fintech, healthcare)? A focused demo is more compelling than a generic one.
 
 > [!IMPORTANT]
 > **Q3: Frontend Preference** — The plan uses vanilla HTML/CSS/JS for speed. If your team's Dev 3 is more productive with React/Next.js, we can switch — but it adds setup overhead.

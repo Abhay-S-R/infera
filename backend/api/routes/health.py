@@ -1,5 +1,5 @@
 """
-ASCENT Health & cost stats API — Dev 4 Phase 2b.
+INFERA Health & cost stats API — Dev 4 Phase 2b.
 
 Dashboard polls GET /api/health/stats for workflow/report/token aggregates.
 """

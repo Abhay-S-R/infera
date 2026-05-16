@@ -22,7 +22,7 @@
 ## One-command smoke test (offline + DB)
 
 ```bash
-cd ~/projects/ascent
+cd ~/projects/infera
 docker compose up -d
 chmod +x scripts/manual_test_column4.sh scripts/test_phase4_dev2.sh scripts/demo_webhooks.sh
 ./scripts/manual_test_column4.sh

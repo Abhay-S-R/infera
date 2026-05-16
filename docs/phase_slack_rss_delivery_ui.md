@@ -97,14 +97,14 @@ Suggested shape:
      - **`competitor_name`:** your tracked name (strongly recommended for consistent profile + Sentinel context)
      - **`custom_question`:** e.g. *“What is the competitive impact of this announcement?”*
 
-4. Run once **manually** in Make; confirm `202` from ASCENT and a new row in `webhook_events`.
+4. Run once **manually** in Make; confirm `202` from INFERA and a new row in `webhook_events`.
 
 ### 3.3 Safety rails (should-ship, same phase if time)
 
 - Rate limit or dedupe in Make (same `title`+`url` within 1 hour).
 - Use a **dedicated** Make scenario for demo RSS so you don’t spam production Slack.
 
-**Exit criteria:** New RSS item → Make POST → ASCENT logs pipeline start → Slack message when done (Phase 1 on).
+**Exit criteria:** New RSS item → Make POST → INFERA logs pipeline start → Slack message when done (Phase 1 on).
 
 ---
 

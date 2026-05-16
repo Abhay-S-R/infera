@@ -1,5 +1,5 @@
 """
-ASCENT Scout Agent — deep web research for competitive intelligence.
+INFERA Scout Agent — deep web research for competitive intelligence.
 
 The Scout is the second agent in the pipeline. After Sentinel flags a signal
 as worth investigating, Scout:

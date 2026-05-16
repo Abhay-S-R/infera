@@ -1,5 +1,5 @@
 """
-ASCENT Structured Logger — JSON-formatted logging with agent context.
+INFERA Structured Logger — JSON-formatted logging with agent context.
 
 Every agent and service should use this module for logging:
 
@@ -183,4 +183,4 @@ def get_logger(name: str) -> StructuredLogger:
         StructuredLogger instance with JSON output.
     """
     _setup_root_logger()
-    return StructuredLogger(f"ascent.{name}")
+    return StructuredLogger(f"infera.{name}")

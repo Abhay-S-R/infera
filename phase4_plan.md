@@ -1,7 +1,7 @@
 # Phase 4 — Column 4 Analyst Parity (2-Dev Parallel Sprint)
 
 **Team:** Dev 2 + Dev 4 only (Dev 1 & Dev 3 sleeping)  
-**Goal:** After both branches merge, ASCENT is **fully Column 4** — not “orchestrated search,” but **analyst-grade** verification, memory, agenda, outputs, and demo reliability.
+**Goal:** After both branches merge, INFERA is **fully Column 4** — not “orchestrated search,” but **analyst-grade** verification, memory, agenda, outputs, and demo reliability.
 
 **Timebox:** ~6 hours wall clock (3h parallel + 1h integration + 2h hardening/demo)
 

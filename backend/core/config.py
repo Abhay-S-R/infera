@@ -1,5 +1,5 @@
 """
-ASCENT Configuration — loads from .env file.
+INFERA Configuration — loads from .env file.
 All team members: import settings from here, never read os.environ directly.
 """
 from pathlib import Path
@@ -9,7 +9,7 @@ from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Always load ascent/.env regardless of current working directory (e.g. demo/fixtures).
+# Always load infera/.env regardless of current working directory (e.g. demo/fixtures).
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _ENV_FILE = _PROJECT_ROOT / ".env"
 
@@ -23,14 +23,14 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str = ""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db"
-    DATABASE_URL_SYNC: str = "postgresql://ascent:ascent_pass@localhost:5433/ascent_db"
+    DATABASE_URL: str = "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db"
+    DATABASE_URL_SYNC: str = "postgresql://infera:infera_pass@localhost:5433/infera_db"
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # Optional integrations
     OMIUM_API_KEY: Optional[str] = None
     OMIUM_ENDPOINT: str = "https://api.omium.dev"
-    OMIUM_WORKSPACE: str = "ascent"
+    OMIUM_WORKSPACE: str = "infera"
     SLACK_WEBHOOK_URL: Optional[str] = Field(
         default=None,
         description="Slack Incoming Webhook URL (https://hooks.slack.com/services/...).",

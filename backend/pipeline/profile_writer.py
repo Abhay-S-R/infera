@@ -1,5 +1,5 @@
 """
-ASCENT Profile Writer — upserts institutional competitor memory after each run.
+INFERA Profile Writer — upserts institutional competitor memory after each run.
 
 Dev 2 owns this file. Dev 4 agents produce analysis; this service persists memory.
 """

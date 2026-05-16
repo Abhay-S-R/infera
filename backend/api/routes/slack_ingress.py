@@ -1,5 +1,5 @@
 """
-Slack Events API — inbound messages trigger the ASCENT pipeline.
+Slack Events API — inbound messages trigger the INFERA pipeline.
 
 Slack app setup (summary):
 1. Create a Slack app → enable Event Subscriptions → Request URL: https://<your-host>/webhooks/slack/events

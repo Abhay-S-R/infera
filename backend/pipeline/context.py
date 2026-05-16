@@ -1,5 +1,5 @@
 """
-ASCENT Tiered Context Manager — compresses prior agent outputs by budget tier.
+INFERA Tiered Context Manager — compresses prior agent outputs by budget tier.
 
 Dev 4 owns this file.
 """

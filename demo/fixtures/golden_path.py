@@ -23,7 +23,7 @@ os.chdir(ROOT)
 
 os.environ.setdefault(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db",
 )
 
 from backend.agents.graph import run_pipeline

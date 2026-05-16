@@ -1,5 +1,5 @@
 """
-ASCENT Agent Graph — LangGraph StateGraph defining the full agent pipeline.
+INFERA Agent Graph — LangGraph StateGraph defining the full agent pipeline.
 
 Flow:
   Sentinel → ProfileLoader → Verifier → Scout(s) → Strategist → Arbiter → Scribe
@@ -121,7 +121,7 @@ def should_analyze_or_skip(state: PipelineState) -> str:
 
 def build_graph(checkpointer=None, *, interrupt_before: list[str] | None = None):
     """
-    Build and compile the ASCENT agent pipeline graph.
+    Build and compile the INFERA agent pipeline graph.
     """
     builder = StateGraph(PipelineState)
 
@@ -222,7 +222,7 @@ async def run_pipeline(
     initial_state: PipelineState | None = None,
 ) -> PipelineState:
     """
-    Run the full ASCENT pipeline for a given signal.
+    Run the full INFERA pipeline for a given signal.
 
     Args:
         signal: The incoming signal to process (not required when resume=True)

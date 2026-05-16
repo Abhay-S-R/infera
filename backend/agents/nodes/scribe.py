@@ -1,5 +1,5 @@
 """
-ASCENT Scribe Agent — Generates final formatted intelligence reports.
+INFERA Scribe Agent — Generates final formatted intelligence reports.
 Dev 4 owns this file.
 """
 from backend.core.logger import get_logger

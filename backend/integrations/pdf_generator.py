@@ -1,5 +1,5 @@
 """
-ASCENT PDF export — writes report bundle to disk (verifiable side-effect).
+INFERA PDF export — writes report bundle to disk (verifiable side-effect).
 """
 from __future__ import annotations
 

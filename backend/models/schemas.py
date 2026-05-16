@@ -1,5 +1,5 @@
 """
-ASCENT Schemas — Pydantic models for structured data flowing between agents.
+INFERA Schemas — Pydantic models for structured data flowing between agents.
 ALL agents must use these schemas. No raw dicts or untyped strings between agents.
 """
 from pydantic import BaseModel, Field

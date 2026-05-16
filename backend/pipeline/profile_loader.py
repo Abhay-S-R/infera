@@ -1,5 +1,5 @@
 """
-ASCENT Profile Loader — loads institutional memory after Sentinel resolves competitor.
+INFERA Profile Loader — loads institutional memory after Sentinel resolves competitor.
 
 Runs between Sentinel and Verifier so Dev 4 can set resolved_competitor without
 touching graph wiring.

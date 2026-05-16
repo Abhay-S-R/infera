@@ -1,5 +1,5 @@
 """
-ASCENT Pipeline State — the shared state that flows through all agents in the LangGraph.
+INFERA Pipeline State — the shared state that flows through all agents in the LangGraph.
 This is the single source of truth for what data moves between agents.
 
 Dev 2 owns this file. Other devs: import from here, never define your own state.
@@ -36,7 +36,7 @@ def _append_list(existing, new):
 
 class PipelineState(TypedDict, total=False):
     """
-    Shared state for the entire ASCENT agent pipeline.
+    Shared state for the entire INFERA agent pipeline.
 
     Each agent reads what it needs and writes its output.
     Annotated fields use reducers so parallel updates merge correctly.

@@ -13,11 +13,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 # Set DB URLs before backend imports (docker-compose maps host 5433 -> container 5432)
 os.environ["DATABASE_URL"] = os.environ.get(
     "DATABASE_URL",
-    "postgresql+asyncpg://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db",
 )
 os.environ["DATABASE_URL_SYNC"] = os.environ.get(
     "DATABASE_URL_SYNC",
-    "postgresql://ascent:ascent_pass@localhost:5433/ascent_db",
+    "postgresql://infera:infera_pass@localhost:5433/infera_db",
 )
 
 if sys.platform == "win32":

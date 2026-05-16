@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ascent-postgres
+    container_name: infera-postgres
     environment:
-      POSTGRES_USER: ascent
-      POSTGRES_PASSWORD: ascent_pass
-      POSTGRES_DB: ascent_db
+      POSTGRES_USER: infera
+      POSTGRES_PASSWORD: infera_pass
+      POSTGRES_DB: infera_db
     ports:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ascent -d ascent_db"]
+      test: ["CMD-SHELL", "pg_isready -U infera -d infera_db"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: ascent-redis
+    container_name: infera-redis
     ports:
       - "6379:6379"
     volumes:

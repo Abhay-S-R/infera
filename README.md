@@ -1,4 +1,4 @@
-# ASCENT
+# INFERA
 
 **Autonomous Strategic Competitive Event & News Tracker**
 
@@ -8,13 +8,13 @@
 [![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-ASCENT is a multi-agent intelligence system that continuously monitors competitive signals, autonomously researches and analyzes them, and generates structured intelligence reports — requiring zero human intervention after the initial trigger.
+INFERA is a multi-agent intelligence system that continuously monitors competitive signals, autonomously researches and analyzes them, and generates structured intelligence reports — requiring zero human intervention after the initial trigger.
 
 ---
 
 ## Overview
 
-Modern competitive intelligence requires tracking hundreds of signals across news, product launches, funding rounds, and market shifts. ASCENT automates this entire workflow through a coordinated pipeline of five specialized AI agents:
+Modern competitive intelligence requires tracking hundreds of signals across news, product launches, funding rounds, and market shifts. INFERA automates this entire workflow through a coordinated pipeline of five specialized AI agents:
 
 ```
 Webhook / Manual Trigger
@@ -62,7 +62,7 @@ Webhook / Manual Trigger
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd ascent
+cd infera
 
 # Create and activate virtual environment
 python -m venv .venv
@@ -137,7 +137,7 @@ Open `http://localhost:3000` to access the dashboard.
 ## Project Structure
 
 ```
-ascent/
+infera/
 ├── docker-compose.yml
 ├── .env.example
 ├── requirements.txt
@@ -190,7 +190,7 @@ ascent/
 |----------|:--------:|---------|-------------|
 | `GEMINI_API_KEY` | Yes | — | Google Gemini API key |
 | `TAVILY_API_KEY` | Yes | — | Tavily web search API key |
-| `DATABASE_URL` | No | `postgresql+asyncpg://ascent:ascent_pass@localhost:5432/ascent_db` | PostgreSQL connection string |
+| `DATABASE_URL` | No | `postgresql+asyncpg://infera:infera_pass@localhost:5432/infera_db` | PostgreSQL connection string |
 | `REDIS_URL` | No | `redis://localhost:6379/0` | Redis connection string |
 | `OMIUM_API_KEY` | No | — | Omium observability tracing key |
 | `SLACK_WEBHOOK_URL` | No | — | Slack Incoming Webhook — summary posted when a report completes |
