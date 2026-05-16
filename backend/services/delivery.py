@@ -19,12 +19,13 @@ from backend.config import settings
 from backend.models.schemas import ReportOutput
 from backend.services.events import publish_event
 from backend.services.logger import get_logger
+from backend.services.llm import generate
 
 logger = get_logger("delivery")
 
 SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
-_EXEC_PREVIEW_MAX = 800
+_EXEC_PREVIEW_MAX = 2900
 
 
 def _exec_body(report: ReportOutput) -> str:
@@ -38,6 +39,25 @@ def _truncate(text: str, max_chars: int = _EXEC_PREVIEW_MAX) -> str:
     if len(t) <= max_chars:
         return t
     return t[: max_chars - 1] + "…"
+
+
+async def _summarize_for_slack(body: str, workflow_id: str) -> str:
+    if len(body) <= 1500:
+        return body
+    try:
+        prompt = (
+            "You are an executive assistant. Summarize the following intelligence brief "
+            "for a Slack message. Use bullet points for key insights and decisions. "
+            "Keep it strictly under 1500 characters.\n\n"
+            f"Here is the brief:\n{body}"
+        )
+        text, _ = await generate(prompt, model="llama-3.3-70b-versatile", agent="scribe")
+        if text:
+            return text
+    except Exception as exc:
+        logger.warning("slack_summarize_failed", workflow_id=workflow_id, error=str(exc))
+    
+    return _truncate(body, 2500)
 
 
 def _sendgrid_configured() -> bool:
@@ -152,7 +172,7 @@ async def _deliver_slack(
             "message": "Slack not configured (set SLACK_WEBHOOK_URL)",
         }
 
-    preview = _truncate(body)
+    preview = await _summarize_for_slack(body, workflow_id)
 
     slack_payload: dict[str, Any] = {
         "text": f"ASCENT: {report.title} ({competitor_line}, {report.confidence_score:.0%})",

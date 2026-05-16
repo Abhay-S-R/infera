@@ -26,13 +26,13 @@ async def receive_news(
         source=payload.source or "news",
         title=payload.title,
         url=payload.url,
-        payload=payload.model_dump(exclude_none=True),
+        payload=payload.model_dump(mode='json', exclude_none=True),
     )
     session.add(webhook)
     await session.commit()
     await session.refresh(webhook)
 
-    background_tasks.add_task(dispatch_pipeline, webhook.id, payload.model_dump(exclude_none=True))
+    background_tasks.add_task(dispatch_pipeline, webhook.id, payload.model_dump(mode='json', exclude_none=True))
     return {"status": "accepted", "webhook_id": webhook.id}
 
 

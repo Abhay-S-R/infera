@@ -13,11 +13,11 @@ from backend.services.logger import get_logger
 
 logger = get_logger("pdf_generator")
 
+import markdown
 
 def _safe_text(text: str) -> str:
     """FPDF core fonts are Latin-1 — strip unsupported characters."""
     return text.encode("latin-1", errors="replace").decode("latin-1")
-
 
 def write_report_pdf(report: ReportOutput, workflow_id: str) -> str | None:
     """
@@ -33,12 +33,14 @@ def write_report_pdf(report: ReportOutput, workflow_id: str) -> str | None:
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
-        pdf.set_font("Helvetica", "B", 14)
+        
+        # Title and Confidence
+        pdf.set_font("Helvetica", "B", 18)
         pdf.multi_cell(0, 8, _safe_text(report.title))
         pdf.ln(4)
-        pdf.set_font("Helvetica", "", 10)
+        pdf.set_font("Helvetica", "I", 11)
         pdf.multi_cell(0, 5, _safe_text(f"Confidence: {report.confidence_score:.0%}"))
-        pdf.ln(6)
+        pdf.ln(8)
 
         sections = [
             ("Executive Brief", report.exec_brief),
@@ -47,12 +49,18 @@ def write_report_pdf(report: ReportOutput, workflow_id: str) -> str | None:
             ("Risk Register", report.risk_brief),
         ]
         for heading, body in sections:
-            pdf.set_font("Helvetica", "B", 12)
-            pdf.multi_cell(0, 7, _safe_text(heading))
+            pdf.set_font("Helvetica", "B", 14)
+            pdf.multi_cell(0, 8, _safe_text(heading))
             pdf.ln(2)
-            pdf.set_font("Helvetica", "", 9)
-            pdf.multi_cell(0, 5, _safe_text(body or "(empty)"))
-            pdf.ln(4)
+            
+            safe_body = body or "(empty)"
+            safe_body = safe_body.replace(":white_check_mark:", "[+]").replace("✅", "[+]")
+            safe_body = safe_body.replace(":warning:", "[!]").replace("⚠️", "[!]")
+            
+            # Convert markdown to HTML and write
+            md_html = markdown.markdown(safe_body, extensions=["tables"])
+            pdf.write_html(_safe_text(md_html))
+            pdf.ln(8)
 
         pdf.output(str(path))
         logger.info("pdf_written", path=str(path), workflow_id=workflow_id)
