@@ -41,6 +41,16 @@ class Settings(BaseSettings):
         description="Optional HTTPS URL for a generic JSON POST on report completion (Zapier, etc.).",
     )
 
+    # Slack Events API — inbound messages → pipeline (`POST /webhooks/slack/events`)
+    SLACK_SIGNING_SECRET: Optional[str] = Field(
+        default=None,
+        description="Signing secret from Slack app (Basic Information → App Credentials).",
+    )
+    SLACK_INGRESS_CHANNEL_IDS: str = Field(
+        default="",
+        description="Comma-separated Slack channel IDs to accept (e.g. C0123,C0456). Empty = all.",
+    )
+
     # Delivery Integrations
     LINEAR_API_KEY: Optional[str] = None
     LINEAR_TEAM_ID: Optional[str] = None

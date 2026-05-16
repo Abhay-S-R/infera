@@ -19,6 +19,9 @@ async def scrape_url(url: str, max_chars: int = 5000) -> str:
     Returns:
         Extracted text content, truncated to max_chars
     """
+    if not url.startswith("http://") and not url.startswith("https://"):
+        return ""
+
     try:
         headers = {
             "User-Agent": (

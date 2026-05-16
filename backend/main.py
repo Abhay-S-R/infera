@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.api.routes import analyze, competitors, health, reports, webhooks
+from backend.api.routes import analyze, competitors, health, reports, webhooks, slack_ingress
 from backend.api import websocket
 from backend.core.config import settings
 from backend.core.database import (
@@ -30,11 +30,27 @@ app.add_middleware(
 )
 
 app.include_router(webhooks.router)
+app.include_router(slack_ingress.router)
 app.include_router(analyze.router)
 app.include_router(reports.router)
 app.include_router(competitors.router)
 app.include_router(health.router)
 app.include_router(websocket.router)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Ngrok sanity check — there is no UI at `/`; use these paths."""
+    return {
+        "service": "ASCENT",
+        "docs": "/docs",
+        "health": "/health",
+        "webhooks": {
+            "news_post": "/webhooks/news",
+            "slack_events_post": "/webhooks/slack/events",
+        },
+    }
+
 
 _DB_REQUIRED_PREFIXES = ("/api/", "/webhooks/")
 
