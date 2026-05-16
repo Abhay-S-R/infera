@@ -4,8 +4,10 @@ function normalizeActivityPayload(raw) {
     if (!raw || typeof raw !== 'object') return raw;
 
     // WebSocket wraps Redis: { type, data: { agent, status, message, ... } }
-    if (raw.data && typeof raw.data === 'object' && (raw.data.agent || raw.data.message)) {
-        return { ...raw.data, event_type: raw.type || raw.data.event_type };
+    // Handle both cases where data might be under 'data' or 'payload'
+    const data = raw.data || raw.payload || raw;
+    if (typeof data === 'object' && (data.agent || data.message || data.summary)) {
+        return { ...data, event_type: raw.type || data.event_type };
     }
     return { ...raw, event_type: raw.type || raw.event_type };
 }
@@ -40,6 +42,28 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+function formatDeliveryChannels(channels) {
+    if (!channels || !Array.isArray(channels)) return '';
+    return '<div class="delivery-channels" style="display: flex; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap;">' +
+        channels.map(c => {
+            let icon = 'ph-envelope';
+            if (c.channel === 'slack') icon = 'ph-slack-logo';
+            if (c.channel === 'outbound_webhook') icon = 'ph-webhooks-logo';
+            
+            const statusClass = c.skipped ? 'delivery-skipped' : (c.success ? 'delivery-success' : 'delivery-failed');
+            const statusIcon = c.skipped ? 'ph-skip-forward' : (c.success ? 'ph-check-circle' : 'ph-x-circle');
+            
+            return `
+                <div class="delivery-channel-tag ${statusClass}" title="${escapeHtml(c.message || '')}">
+                    <i class="ph ${icon}"></i>
+                    <span>${escapeHtml(c.channel)}</span>
+                    <i class="ph ${statusIcon}"></i>
+                </div>
+            `;
+        }).join('') +
+        '</div>';
+}
+
 function addActivityEvent(rawData) {
     const feedContainer = document.getElementById('activity-feed');
     if (!feedContainer) return;
@@ -48,16 +72,20 @@ function addActivityEvent(rawData) {
     const arbiterRejection = isArbiterRejection(data);
     const verifierRejection = isVerifierRejection(data);
     const rejection = arbiterRejection || verifierRejection;
+    const isDelivery = data.event_type === 'delivery.completed' || (data.event_type === 'workflow.completed' && data.delivery);
 
     const item = document.createElement('div');
     item.className = 'activity-item slide-in';
     if (rejection) {
         item.classList.add('activity-rejection-alert');
     }
+    if (isDelivery) {
+        item.classList.add('delivery-event');
+    }
 
     let statusClass = 'status-default';
     if (data.status === 'active' || data.status === 'running') statusClass = 'status-running';
-    else if (data.status === 'done' || data.status === 'success') statusClass = 'status-success';
+    else if (data.status === 'done' || data.status === 'success' || data.status === 'completed') statusClass = 'status-success';
     else if (data.status === 'error' || data.status === 'failed') statusClass = 'status-error';
     else if (data.status === 'retry' || data.status === 'rejected') statusClass = 'status-retry';
     else if (data.status === 'idle') statusClass = 'status-idle';
@@ -66,10 +94,12 @@ function addActivityEvent(rawData) {
         ? new Date(data.timestamp).toLocaleTimeString()
         : new Date().toLocaleTimeString();
 
-    const agentName = data.agent || data.node || 'System';
+    let agentName = data.agent || data.node || 'System';
+    if (data.event_type === 'delivery.completed') agentName = 'Delivery';
+    
     const displayStatus = data.status
         ? data.status.charAt(0).toUpperCase() + data.status.slice(1)
-        : '';
+        : (data.event_type === 'delivery.completed' ? 'Completed' : '');
 
     let rejectionBanner = '';
     if (verifierRejection) {
@@ -90,6 +120,13 @@ function addActivityEvent(rawData) {
         ? '<div class="activity-detail">' + escapeHtml(data.detail) + '</div>'
         : '';
 
+    let deliveryHtml = '';
+    if (data.event_type === 'delivery.completed' && data.channels) {
+        deliveryHtml = formatDeliveryChannels(data.channels);
+    } else if (data.delivery && data.delivery.channels) {
+        deliveryHtml = formatDeliveryChannels(data.delivery.channels);
+    }
+
     item.innerHTML = `
         ${rejectionBanner}
         <div class="activity-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
@@ -101,8 +138,9 @@ function addActivityEvent(rawData) {
             <span class="activity-time" style="color: var(--text-muted); font-size: 0.68rem; font-weight: 500; font-variant-numeric: tabular-nums;">${timeString}</span>
         </div>
         <div class="activity-body" style="color: var(--text-muted); font-size: 0.85rem; line-height: 1.6;">
-            ${escapeHtml(data.message || '')}
+            ${escapeHtml(data.message || data.summary || '')}
         </div>
+        ${deliveryHtml}
         ${detailHtml}
     `;
 
