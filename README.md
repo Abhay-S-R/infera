@@ -24,10 +24,10 @@ INFERA automates this entire workflow through a coordinated pipeline of five spe
 Webhook / Slack / RSS Trigger
         │
         ▼
-┌─────────────┐     ┌───────────┐     ┌──────────────┐     ┌───────────┐     ┌─────────┐
-│  Sentinel   │────▶│   Scout   │────▶│  Strategist  │────▶│  Arbiter  │────▶│  Scribe │
-│  (Monitor)  │     │ (Research)│     │  (Analysis)  │     │(Validator)│     │ (Report)│
-└─────────────┘     └───────────┘     └──────────────┘     └───────────┘     └─────────┘
+┌─────────────┐     ┌───────────┐     ┌──────────────┐     ┌───────────┐      ┌─────────┐
+│  Sentinel   │────▶│   Scout   │────▶│  Strategist │────▶│  Arbiter  │────▶│  Scribe │
+│  (Monitor)  │     │ (Research)│     │  (Analysis)  │     │(Validator)│      │ (Report)│
+└─────────────┘     └───────────┘     └──────────────┘     └───────────┘      └─────────┘
      Filter            Web Search        Deep Analysis       Fact-Check        PDF / Email
      & Score           & Scrape          & SWOT               & Retry          Generation
 ```
