@@ -5,44 +5,51 @@
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.4-764ABC)](https://langchain-ai.github.io/langgraph/)
-[![Gemini](https://img.shields.io/badge/Gemini-2.5%20Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-INFERA is a multi-agent intelligence system that continuously monitors competitive signals, autonomously researches and analyzes them, and generates structured intelligence reports — requiring zero human intervention after the initial trigger.
+INFERA is an end-to-end autonomous intelligence system that continuously monitors competitive signals, conducts deep web research, analyzes impact, and delivers structured executive briefings — requiring zero human intervention after the initial trigger.
 
 ---
 
-## Overview
+## Why Infera?
 
-Modern competitive intelligence requires tracking hundreds of signals across news, product launches, funding rounds, and market shifts. INFERA automates this entire workflow through a coordinated pipeline of five specialized AI agents:
+Modern competitive intelligence requires tracking hundreds of signals across news, product launches, funding rounds, and market shifts. Traditional analysts spend hours gathering and validating data before they can even begin analysis. 
 
-```
-Webhook / Manual Trigger
+INFERA automates this entire workflow through a coordinated pipeline of five specialized AI agents. Drop a news link or a Slack message, and within 60 seconds, you receive a fully vetted, multi-page PDF strategy report in your inbox.
+
+---
+
+## The Agent Pipeline
+
+```text
+Webhook / Slack / RSS Trigger
         │
         ▼
 ┌─────────────┐     ┌───────────┐     ┌──────────────┐     ┌───────────┐     ┌─────────┐
 │  Sentinel   │────▶│   Scout   │────▶│  Strategist  │────▶│  Arbiter  │────▶│  Scribe │
 │  (Monitor)  │     │ (Research)│     │  (Analysis)  │     │(Validator)│     │ (Report)│
 └─────────────┘     └───────────┘     └──────────────┘     └───────────┘     └─────────┘
-     Filter            Web Search        Deep Analysis       Fact-Check        Report
+     Filter            Web Search        Deep Analysis       Fact-Check        PDF / Email
      & Score           & Scrape          & SWOT               & Retry          Generation
 ```
 
-| Agent | Role |
-|-------|------|
-| **Sentinel** | Filters incoming signals, scores relevance (0–1), classifies event type |
-| **Scout** | Executes web searches via Tavily, scrapes sources, structures raw findings |
-| **Strategist** | Synthesizes research into competitive analysis with impact assessments |
-| **Arbiter** | Cross-references claims against evidence, triggers re-research if confidence is low |
-| **Scribe** | Generates formatted markdown/PDF reports with executive summaries and citations |
+| Agent | Role & Capabilities |
+|-------|---------------------|
+| **Sentinel** | Listens to inbound signals (Slack/Webhooks). Scores relevance (0–1), infers the competitor, and classifies the event type. |
+| **Scout** | The researcher. Executes targeted web searches via Tavily, scrapes full-text articles, and structures raw findings. |
+| **Strategist** | The analyst. Synthesizes research into competitive analysis, calculating Threat Levels and performing SWOT analysis. |
+| **Arbiter** | The skeptic. Cross-references claims against primary evidence. If confidence is low, it halts or loops back to Scout. |
+| **Scribe** | Planned publishing layer responsible for formatting intelligence reports, generating PDFs, and dispatching them via Slack & SendGrid. Currently SendGrid is represented in the UI as a disabled/preview feature. |
 
-### Key Capabilities
+---
 
-- **Autonomous Retry Loops** — Arbiter can reject low-confidence analysis and send it back to Scout with modified search terms
-- **Quality Gates** — Confidence checks between every agent transition
-- **Token Budget Management** — Per-agent and per-workflow caps to control costs
-- **Crash Recovery** — LangGraph + PostgreSQL checkpointing resumes from the last successful agent on failure
-- **Real-Time Dashboard** — WebSocket-powered live feed of agent activity and pipeline state
+## Key Features
+
+- **Omnichannel Ingress:** Trigger research via REST webhooks, scheduled cron jobs, or simply by `@mentioning` the bot in your Slack workspace.
+- **Multi-Channel Delivery:** Final reports are exported as Markdown and PDFs, posted to Slack channels, and emailed to stakeholders via SendGrid.
+- **Autonomous Retry Loops:** The Arbiter acts as a quality gate. It will reject hallucinated analysis and force the Scout to dig deeper if sources don't corroborate.
+- **Institutional Memory:** Maintains a PostgreSQL-backed profile on every tracked competitor, appending new launches and historical context to inform future analysis.
+- **Token Budget Management:** Strict per-agent and per-workflow LLM token caps to guarantee predictable API costs.
+- **Real-Time Dashboard:** A sleek, dark-mode dashboard with WebSocket connections to visualize agent thinking and pipeline state in real time.
 
 ---
 
@@ -50,18 +57,18 @@ Webhook / Manual Trigger
 
 ### Prerequisites
 
-| Requirement | Version |
-|-------------|---------|
-| Python | 3.12+ |
-| Docker & Docker Compose | Latest |
-| [Google Gemini API Key](https://aistudio.google.com/apikey) | Required |
-| [Tavily API Key](https://tavily.com/) | Required |
+| Requirement | Version | Note |
+|-------------|---------|------|
+| Python | `3.12+` | Required for advanced async features |
+| Docker & Compose | `Latest` | Runs PostgreSQL and Redis |
+| [Google Gemini API Key](https://aistudio.google.com/apikey) | `Required`| Core LLM engine |
+| [Tavily API Key](https://tavily.com/) | `Required`| Search & scraping |
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/Abhay-S-R/infera.git
 cd infera
 
 # Create and activate virtual environment
@@ -78,45 +85,38 @@ pip install -r requirements.txt
 
 ### Configuration
 
+Copy the example environment file:
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and set the required API keys:
+Open `.env` and configure your API keys. At minimum, you need `GEMINI_API_KEY` and `TAVILY_API_KEY`. See the **Configuration Reference** below for advanced integrations like Slack and SendGrid.
 
-```env
-GEMINI_API_KEY=<your-gemini-api-key>
-TAVILY_API_KEY=<your-tavily-api-key>
-```
+### Running the Stack
 
-### Running
-
-**1. Start infrastructure services:**
-
+**1. Start infrastructure services (PostgreSQL & Redis):**
 ```bash
 docker compose up -d
 ```
 
-**2. Start the API server:**
-
+**2. Start the API & Pipeline Engine:**
 ```bash
 uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-**3. Start the frontend:**
-
+**3. Start the Real-time Dashboard:**
+Open a new terminal window and run:
 ```bash
 python -m http.server 3000 --directory frontend
 ```
 
 **4. Verify:**
-
+Navigate to `http://localhost:3000/index2.html` in your browser. 
+To test the API directly:
 ```bash
 curl http://localhost:8000/health
-# → {"status": "ok"}
+# → {"status": "ok", "components": {...}}
 ```
-
-Open `http://localhost:3000` to access the dashboard.
 
 ---
 
@@ -124,100 +124,44 @@ Open `http://localhost:3000` to access the dashboard.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Service health check |
-| `POST` | `/webhooks/news` | Ingest a news signal and trigger the pipeline |
-| `POST` | `/webhooks/scheduled` | Trigger a scheduled competitor scan |
-| `POST` | `/api/analyze` | Submit a manual analysis request |
+| `GET` | `/health` | Service health and dependency checks |
+| `POST` | `/webhooks/news` | Ingest a raw JSON payload/news signal |
+| `POST` | `/webhooks/slack/events` | Slack Events API ingress endpoint (handles @mentions) |
+| `POST` | `/api/analyze` | Submit a direct, synchronous analysis request |
 | `GET` | `/api/reports` | List all completed intelligence reports |
-| `GET` | `/api/reports/{id}` | Retrieve a specific report |
-| `WS` | `/ws/activity` | Subscribe to real-time agent activity events |
-
----
-
-## Project Structure
-
-```
-infera/
-├── docker-compose.yml
-├── .env.example
-├── requirements.txt
-│
-├── backend/
-│   ├── main.py                     # FastAPI application entry point
-│   ├── config.py                   # Environment configuration (Pydantic Settings)
-│   │
-│   ├── agents/
-│   │   ├── state.py                # LangGraph PipelineState definition
-│   │   ├── graph.py                # StateGraph with agent nodes and edges
-│   │   ├── nodes/                  # Agent implementations (sentinel, verifier, scout, …)
-│   │   └── tools/
-│   │       ├── web_search.py       # Tavily search integration
-│   │       └── url_scraper.py      # URL content extraction
-│   │
-│   ├── api/
-│   │   ├── deps.py
-│   │   ├── websocket.py
-│   │   └── routes/                 # analyze, competitors, health, reports, webhooks
-│   │
-│   ├── core/                       # Config, DB, logging, budget, events, tracing
-│   ├── integrations/             # LLM client, SendGrid/Slack delivery, PDF export
-│   ├── pipeline/                   # Executor, checkpointing, scheduler, context, profiles
-│   │
-│   └── models/
-│       ├── tables.py               # Database table definitions
-│       └── schemas.py              # Pydantic models for agent I/O
-│
-├── frontend/
-│   ├── index.html
-│   ├── css/styles.css
-│   └── js/
-│       ├── app.js
-│       ├── websocket.js
-│       ├── pipeline.js
-│       ├── reports.js
-│       └── competitors.js
-│
-└── demo/
-    ├── fixtures/                   # Sample webhook payloads
-    └── cached_responses/           # Cached API responses for offline mode
-```
+| `GET` | `/api/competitors` | View tracked institutional memory profiles |
+| `WS` | `/ws/activity` | WebSocket stream for live agent tracing |
 
 ---
 
 ## Configuration Reference
 
-| Variable | Required | Default | Description |
-|----------|:--------:|---------|-------------|
-| `GEMINI_API_KEY` | Yes | — | Google Gemini API key |
-| `TAVILY_API_KEY` | Yes | — | Tavily web search API key |
-| `DATABASE_URL` | No | `postgresql+asyncpg://infera:infera_pass@localhost:5432/infera_db` | PostgreSQL connection string |
-| `REDIS_URL` | No | `redis://localhost:6379/0` | Redis connection string |
-| `OMIUM_API_KEY` | No | — | Omium observability tracing key |
-| `SLACK_WEBHOOK_URL` | No | — | Slack Incoming Webhook — summary posted when a report completes |
-| `OUTBOUND_WEBHOOK_URL` | No | — | Generic JSON POST URL (Zapier, Teams, etc.) on report completion |
-| `DEMO_MODE` | No | `false` | When `true`, uses cached responses instead of live APIs |
-| `LOG_LEVEL` | No | `INFO` | Application log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `MAX_TOKENS_PER_WORKFLOW` | No | `500000` | Maximum token budget per pipeline execution |
-| `MAX_COST_PER_WORKFLOW` | No | `2.00` | Maximum estimated cost (USD) per pipeline execution |
+| Variable | Required | Description |
+|----------|:--------:|-------------|
+| `GEMINI_API_KEY` | **Yes** | Google Gemini API key used by all agents |
+| `TAVILY_API_KEY` | **Yes** | Tavily web search API key used by Scout |
+| `DATABASE_URL` | No | `postgresql+asyncpg://infera:infera_pass@localhost:5433/infera_db` |
+| `SLACK_WEBHOOK_URL` | No | Slack Incoming Webhook for outbound delivery summaries |
+| `SLACK_SIGNING_SECRET` | No | Required if exposing `/webhooks/slack/events` for Slack Ingress |
+| `SENDGRID_API_KEY` | No | Required for sending PDF reports via Email |
+| `SENDGRID_FROM_EMAIL` | No | Verified sender address for SendGrid |
+| `SENDGRID_TO_EMAIL` | No | Target recipient for PDF reports |
+| `MAX_COST_PER_WORKFLOW`| No | Hard cap (USD) on API costs per signal execution. Default `2.00` |
 
 ---
 
-## Tech Stack
+## Project Structure
 
-| Layer | Technology |
-|-------|-----------|
-| **API Framework** | FastAPI with async support |
-| **Agent Orchestration** | LangGraph (StateGraph) |
-| **LLM** | Google Gemini 2.5 Flash |
-| **Web Search** | Tavily API |
-| **Database** | PostgreSQL 16 (async via SQLAlchemy + asyncpg) |
-| **Cache / Pub-Sub** | Redis 7 |
-| **Observability** | Structured JSON logging, Omium SDK |
-| **Frontend** | Vanilla HTML/CSS/JS with WebSocket |
-| **Infrastructure** | Docker Compose |
-
----
-
-## License
-
-MIT
+```text
+infera/
+├── backend/
+│   ├── agents/          # LangGraph definitions and 5 Agent Node implementations
+│   ├── api/             # FastAPI routes (webhooks, health, reports, slack)
+│   ├── core/            # Config, DB, Tracing, Token Budgets, Logging
+│   ├── integrations/    # LLM wrappers, PDF Generator, SendGrid, Slack
+│   ├── models/          # SQLAlchemy tables & Pydantic schemas
+│   └── pipeline/        # Background executor, memory profiles, context truncation
+├── frontend/            # HTML/JS/CSS WebSocket Dashboard
+├── demo/                # Fixtures and DB seeding scripts
+└── tests/               # E2E test suites (Pytest)
+```
