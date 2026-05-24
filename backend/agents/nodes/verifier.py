@@ -4,6 +4,7 @@ INFERA Verifier Agent — skeptical primary-source verification (Phase 4).
 Runs multi-step checks before Scout fan-out: signal URL, official blog,
 product/pricing page, LinkedIn, optional SEC. Fail-closed on fabricated signals.
 """
+
 from __future__ import annotations
 
 import re
@@ -75,10 +76,7 @@ def _resolve_primary_entity(signal: SignalInput, sentinel: SentinelOutput) -> st
 def _entity_tokens(entity: str) -> list[str]:
     """Significant tokens for matching (e.g. 'Nimbus AI' -> ['nimbus'])."""
     stop = {"inc", "corp", "ltd", "the", "and", "for", "with", "from"}
-    tokens = [
-        t for t in re.findall(r"[a-z0-9]{3,}", entity.lower())
-        if t not in stop
-    ]
+    tokens = [t for t in re.findall(r"[a-z0-9]{3,}", entity.lower()) if t not in stop]
     return tokens or [entity.lower()]
 
 
@@ -230,7 +228,10 @@ async def _check_product_page(entity: str, title: str) -> VerificationCheck:
     for r in results:
         lower = r.url.lower()
         blob = f"{r.title} {r.snippet}"
-        if any(x in lower for x in ("/pricing", "/product", "/signup", "/register", "/demo")):
+        if any(
+            x in lower
+            for x in ("/pricing", "/product", "/signup", "/register", "/demo")
+        ):
             if _evidence_mentions_entity(entity, blob):
                 return VerificationCheck(
                     source_type=VerificationSourceType.PRODUCT_PAGE,
@@ -329,7 +330,11 @@ async def run_verification_checks(
                 source_type=VerificationSourceType.SEC_FILING,
                 passed=bool(sec_results),
                 url=sec_results[0].url if sec_results else None,
-                evidence=sec_results[0].snippet[:200] if sec_results else "No SEC filing found",
+                evidence=(
+                    sec_results[0].snippet[:200]
+                    if sec_results
+                    else "No SEC filing found"
+                ),
             )
         )
     checks.append(await _check_news_corroboration(entity, title))
@@ -377,12 +382,15 @@ async def verifier_node(state: PipelineState) -> dict:
     if profile is None:
         profile = await load_competitor_profile_for_pipeline(signal, sentinel)
 
-    await publish_event("agent_activity", {
-        "agent": "verifier",
-        "status": "running",
-        "message": "Running primary-source verification checks...",
-        "workflow_id": workflow_id,
-    })
+    await publish_event(
+        "agent_activity",
+        {
+            "agent": "verifier",
+            "status": "running",
+            "message": "Running primary-source verification checks...",
+            "workflow_id": workflow_id,
+        },
+    )
 
     if _demo_verification_bypass(signal):
         output = VerificationOutput(
@@ -439,7 +447,9 @@ async def verifier_node(state: PipelineState) -> dict:
         from pydantic import BaseModel, Field
 
         class VerifierDecision(BaseModel):
-            is_verified: bool = Field(description="True only if signal is real enough to investigate")
+            is_verified: bool = Field(
+                description="True only if signal is real enough to investigate"
+            )
             reasoning: str
 
         decision, _usage = await generate_structured(
@@ -447,7 +457,6 @@ async def verifier_node(state: PipelineState) -> dict:
             response_model=VerifierDecision,
             system=VERIFIER_DECISION_PROMPT,
             temperature=0.1,
-            model="llama-3.3-70b-versatile",
             budget=budget,
             agent="verifier",
         )
@@ -477,7 +486,9 @@ async def verifier_node(state: PipelineState) -> dict:
     if degraded and settings.VERIFIER_STRICT:
         golden_fallback = await _golden_path_seeded_verification(signal)
         if golden_fallback:
-            wf_logger.info("verifier_degraded_golden_path", competitor=signal.competitor_name)
+            wf_logger.info(
+                "verifier_degraded_golden_path", competitor=signal.competitor_name
+            )
             return _verified_return(golden_fallback, budget, workflow_id, profile)
         if _rule_based_verified(checks, primary_entity):
             is_verified = True
@@ -503,22 +514,28 @@ async def verifier_node(state: PipelineState) -> dict:
     )
 
     if not output.is_verified:
-        await publish_event("agent_activity", {
-            "agent": "verifier",
-            "status": "error",
-            "message": "Signal unverified — pipeline halted.",
-            "detail": output.reasoning,
-            "workflow_id": workflow_id,
-        })
-        await publish_event("verifier.rejected", {
-            "agent": "verifier",
-            "status": "rejected",
-            "message": "Signal unverified — pipeline halted",
-            "detail": output.reasoning,
-            "checks_passed": sum(1 for c in output.checks if c.passed),
-            "checks_total": len(output.checks),
-            "workflow_id": workflow_id,
-        })
+        await publish_event(
+            "agent_activity",
+            {
+                "agent": "verifier",
+                "status": "error",
+                "message": "Signal unverified — pipeline halted.",
+                "detail": output.reasoning,
+                "workflow_id": workflow_id,
+            },
+        )
+        await publish_event(
+            "verifier.rejected",
+            {
+                "agent": "verifier",
+                "status": "rejected",
+                "message": "Signal unverified — pipeline halted",
+                "detail": output.reasoning,
+                "checks_passed": sum(1 for c in output.checks if c.passed),
+                "checks_total": len(output.checks),
+                "workflow_id": workflow_id,
+            },
+        )
         return {
             "verification_output": output,
             "competitor_profile": profile,
