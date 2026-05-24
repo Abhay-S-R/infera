@@ -1,1 +1,38 @@
-/* This file is intentionally empty — all styles are in globals.css or CSS Modules */
+/* page.module.css — Landing page layout sections */
+
+.scrollContent {
+  padding: 15vh 0;
+  position: relative;
+  background-color: var(--bg-black);
+  z-index: 10;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 4rem;
+}
+
+.bottomGlow {
+  position: fixed;
+  bottom: -100px;
+  left: 0;
+  width: 100%;
+  height: 250px;
+  background: radial-gradient(
+    ellipse at bottom,
+    rgba(255, 42, 42, 0.45) 0%,
+    rgba(204, 26, 26, 0.12) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 9999;
+  filter: blur(40px);
+  mix-blend-mode: screen;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 0 2rem;
+  }
+}

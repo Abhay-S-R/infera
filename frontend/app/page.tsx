@@ -1,8 +1,24 @@
-export default function Home() {
+import Hero from "@/components/landing/Hero";
+import FeatureGrid from "@/components/landing/FeatureGrid";
+import LargeText from "@/components/landing/LargeText";
+import CTAButton from "@/components/landing/CTAButton";
+import styles from "./page.module.css";
+
+export default function LandingPage() {
   return (
     <main>
-      <h1>Infera — Phase 1 Scaffold Complete</h1>
-      <p>Landing page components will be built in Phase 3.</p>
+      <Hero />
+
+      <section className={styles.scrollContent}>
+        <div className={styles.container}>
+          <FeatureGrid />
+          <LargeText />
+        </div>
+      </section>
+
+      <CTAButton />
+
+      <div className={styles.bottomGlow} />
     </main>
   );
 }
