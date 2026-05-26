@@ -8,7 +8,10 @@ import CompetitorPanel from "@/components/dashboard/CompetitorPanel";
 import ActivityFeed, {
   type ActivityEvent,
 } from "@/components/dashboard/ActivityFeed";
+import { useWebSocket } from "@/hooks/useWebSocket";
 import styles from "./page.module.css";
+
+const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://127.0.0.1:8000";
 
 export default function DashboardPage() {
   const [pipelineStatuses, setPipelineStatuses] = useState<PipelineStatus>({});
@@ -21,8 +24,6 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // This will be wired to the WebSocket in Phase 6
-  // For now, pipeline status updates come from activity events
   const handlePipelineUpdate = useCallback(
     (node: string, status: PipelineStatus[string]) => {
       setPipelineStatuses((prev) => {
@@ -39,12 +40,48 @@ export default function DashboardPage() {
     []
   );
 
-  // Pipeline and activity handlers are exposed via props/context.
-  // WebSocket integration will be wired in Phase 6.
+  // Handle incoming WebSocket messages → dispatch to activity feed + pipeline
+  const handleWsMessage = useCallback(
+    (payload: Record<string, unknown>) => {
+      addActivityEvent(payload);
+
+      const agentName = (payload.agent || payload.node) as string | undefined;
+      const status = payload.status as string | undefined;
+      const eventType = payload.event_type as string | undefined;
+
+      // Update pipeline node status
+      if (agentName && status) {
+        handlePipelineUpdate(
+          agentName.toLowerCase(),
+          status as PipelineStatus[string]
+        );
+      }
+
+      // Special case: verifier rejection → mark verifier as error
+      if (eventType === "verifier.rejected") {
+        handlePipelineUpdate("verifier", "error");
+      }
+    },
+    [addActivityEvent, handlePipelineUpdate]
+  );
+
+  // Connect to the WebSocket activity stream
+  const { status: wsStatus } = useWebSocket({
+    url: `${WS_URL}/ws/activity`,
+    onMessage: handleWsMessage,
+  });
 
   return (
     <div className={styles.page}>
-      {/* Row 1: Analyze Form + Pipeline */}
+      {/* Connection status indicator */}
+      {wsStatus === "disconnected" && activityEvents.length > 0 && (
+        <div className={styles.wsWarning}>
+          <span className={styles.wsWarningDot} />
+          WebSocket disconnected — reconnecting…
+        </div>
+      )}
+
+      {/* Row 1: Analyze Form */}
       <section className={styles.topSection}>
         <div className={styles.formColumn}>
           <AnalyzeForm onActivityEvent={addActivityEvent} />

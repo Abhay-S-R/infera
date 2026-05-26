@@ -25,7 +25,11 @@ export default function HealthPanel() {
         const res = await fetch(`${API_URL}/api/health/stats`);
         if (!res.ok) throw new Error("Health endpoint unavailable");
         const data = await res.json();
-        setStats(data);
+        setStats({
+          active_workflows: data.active_workflows ?? 0,
+          total_reports: data.total_reports ?? 0,
+          recent_completions: data.recent_completions ?? [],
+        });
         setOnline(true);
       } catch {
         setOnline(false);
@@ -68,10 +72,10 @@ export default function HealthPanel() {
             <span className={styles.completionsTitle}>
               Recent Completions
             </span>
-            {stats.recent_completions.length === 0 ? (
+            {(stats.recent_completions ?? []).length === 0 ? (
               <span className={styles.empty}>No recent completions</span>
             ) : (
-              stats.recent_completions.slice(0, 5).map((c, i) => (
+              (stats.recent_completions ?? []).slice(0, 5).map((c, i) => (
                 <div key={i} className={styles.completionItem}>
                   <span className="status-indicator status-success" />
                   <span className={styles.completionName}>

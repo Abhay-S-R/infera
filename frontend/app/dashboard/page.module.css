@@ -31,3 +31,32 @@
     flex-direction: column;
   }
 }
+
+/* ── WebSocket disconnection warning ── */
+.wsWarning {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.15);
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #fb923c;
+  animation: ws-pulse 2s infinite;
+}
+
+.wsWarningDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f97316;
+  flex-shrink: 0;
+}
+
+@keyframes ws-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
