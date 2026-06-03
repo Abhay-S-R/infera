@@ -40,10 +40,9 @@ htmlcov/
 *.pdf
 reports_output/
 
-# Next.js (frontend)
-frontend/.next/
-frontend/node_modules/
-frontend/out/
-
-# Legacy backup (remove after migration)
-frontend_legacy/
+# Next.js Frontend
+.next/
+out/
+node_modules/
+.turbo/
+*.tsbuildinfo

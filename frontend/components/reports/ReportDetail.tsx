@@ -54,16 +54,18 @@ function renderMarkdown(md: string): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
   let listItems: string[] = [];
   let listType: "ul" | "ol" | null = null;
+  let keyCounter = 0;
 
   function flushList() {
     if (listItems.length === 0) return;
     const items = listItems.map((item, i) => (
       <li key={i}>{renderInline(item)}</li>
     ));
+    const listKey = `list-${keyCounter++}`;
     if (listType === "ol") {
-      elements.push(<ol key={elements.length}>{items}</ol>);
+      elements.push(<ol key={listKey}>{items}</ol>);
     } else {
-      elements.push(<ul key={elements.length}>{items}</ul>);
+      elements.push(<ul key={listKey}>{items}</ul>);
     }
     listItems = [];
     listType = null;
@@ -99,18 +101,18 @@ function renderMarkdown(md: string): React.ReactNode[] {
     // Headings
     if (line.startsWith("### ")) {
       flushList();
-      elements.push(<h3 key={i}>{renderInline(line.slice(4))}</h3>);
+      elements.push(<h3 key={`h3-${i}`}>{renderInline(line.slice(4))}</h3>);
     } else if (line.startsWith("## ")) {
       flushList();
-      elements.push(<h2 key={i}>{renderInline(line.slice(3))}</h2>);
+      elements.push(<h2 key={`h2-${i}`}>{renderInline(line.slice(3))}</h2>);
     } else if (line.startsWith("# ")) {
       flushList();
-      elements.push(<h1 key={i}>{renderInline(line.slice(2))}</h1>);
+      elements.push(<h1 key={`h1-${i}`}>{renderInline(line.slice(2))}</h1>);
     }
     // Horizontal rule
     else if (/^---+$/.test(line.trim())) {
       flushList();
-      elements.push(<hr key={i} />);
+      elements.push(<hr key={`hr-${i}`} />);
     }
     // Unordered list
     else if (/^[\s]*[-*]\s/.test(line)) {
@@ -135,7 +137,7 @@ function renderMarkdown(md: string): React.ReactNode[] {
     // Paragraph
     else {
       flushList();
-      elements.push(<p key={i}>{renderInline(line)}</p>);
+      elements.push(<p key={`p-${i}`}>{renderInline(line)}</p>);
     }
   }
   flushList();
